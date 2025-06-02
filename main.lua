@@ -51,20 +51,46 @@ function love.draw()
 end
 
 function love.keypressed(key)
-    if key == "m" then UI.toggleUpgradeTree() end
-    if key == "tab" then UI.toggleInventory() end
-    if key == "r" then UI.toggleRealmList() end
+    if key == "m" then
+        UI.toggleUpgradeTree()
+    end
     
-    if key == "t" then Game.changeRealm(-1, Player, Enemies) end -- Pass Player and Enemies
-    if key == "y" then Game.changeRealm(1, Player, Enemies) end -- Pass Player and Enemies
-    elseif key == "c" then
+    if key == "tab" then
+        UI.toggleInventory()
+    end
+    
+    if key == "r" then
+        UI.toggleRealmList()
+    end
+    
+    if key == "t" then
+        Game.changeRealm(-1, Player, Enemies) -- Pass Player and Enemies
+    end
+    
+    if key == "y" then
+        Game.changeRealm(1, Player, Enemies) -- Pass Player and Enemies
+    end
+    
+    -- Changed elseif to if for the 'c' key to make it an independent condition
+    if key == "c" then 
         Player.craftTier2Essence()
     end
     
-    if key == "left" then UI.moveUpgradeTreeCamera(20, 0) end
-    if key == "right" then UI.moveUpgradeTreeCamera(-20, 0) end
-    if key == "up" then UI.moveUpgradeTreeCamera(0, 20) end
-    if key == "down" then UI.moveUpgradeTreeCamera(0, -20) end
+    if key == "left" then
+        UI.moveUpgradeTreeCamera(20, 0)
+    end
+    
+    if key == "right" then
+        UI.moveUpgradeTreeCamera(-20, 0)
+    end
+    
+    if key == "up" then
+        UI.moveUpgradeTreeCamera(0, 20)
+    end
+    
+    if key == "down" then
+        UI.moveUpgradeTreeCamera(0, -20)
+    end
 end
 
 function love.mousepressed(x, y, button)
