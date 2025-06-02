@@ -8,8 +8,6 @@ UI.state = {
 
 UI.treeOffset = { x = 0, y = 0 }
 
--- Optional: function UI.initialize() ... end
-
 function UI.toggleInventory()
     UI.state.showInventory = not UI.state.showInventory
 end
@@ -27,7 +25,6 @@ function UI.moveUpgradeTreeCamera(dx, dy)
     UI.treeOffset.y = UI.treeOffset.y + dy
 end
 
--- drawHUD now takes playerData and currentRealm
 function UI.drawHUD(playerData, currentRealm)
     love.graphics.setColor(1, 1, 1)
     love.graphics.print("HP: " .. playerData.hp .. "/" .. playerData.maxHp, 10, 10)
@@ -35,20 +32,15 @@ function UI.drawHUD(playerData, currentRealm)
     love.graphics.print("Kills: " .. playerData.kills, 10, 50)
     love.graphics.print("Gold: " .. playerData.gold, 10, 70)
     love.graphics.print("Essence T1: " .. playerData.essence.tier1 .. " T2: " .. playerData.essence.tier2, 10, 90)
-    love.graphics.print("Realm: " .. currentRealm, 10, 110) -- currentRealm passed as argument
+    love.graphics.print("Realm: " .. currentRealm, 10, 110) 
 end
 
--- drawInventory now takes specific player currency data
 function UI.drawInventory(playerGold, playerEssenceT1, playerEssenceT2)
     if not UI.state.showInventory then return end
     love.graphics.setColor(0.2, 0.2, 0.2, 0.9)
     love.graphics.rectangle("fill", 200, 150, 400, 300)
     love.graphics.setColor(1, 1, 1)
     love.graphics.print("Inventory", 350, 160)
-    -- Display gold and essences if needed, e.g.:
-    -- love.graphics.print("Gold: " .. playerGold, 210, 190)
-    -- love.graphics.print("Essence T1: " .. playerEssenceT1, 210, 210)
-    -- love.graphics.print("Essence T2: " .. playerEssenceT2, 210, 230)
 end
 
 function UI.drawRealmList(realmsTable, currentRealm)
@@ -66,30 +58,48 @@ function UI.drawRealmList(realmsTable, currentRealm)
     end
 end
 
-function UI.drawUpgradeTree(upgradeNodesTable)
+-- Updated signature to accept effectParams
+function UI.drawUpgradeTree(upgradeNodesTable, effectParams)
     if not UI.state.showUpgradeTree then return end
+    
+    local defaultNodeColor = {0.7, 0.7, 1}
+    local maxedNodeColor = {1, 0.84, 0} -- Gold
+    local textColor = {1, 1, 1} -- White
+    local lineColor = {1, 1, 1} -- White for lines
+
     for _, node in ipairs(upgradeNodesTable) do
-        love.graphics.setColor(0.7, 0.7, 1)
+        if node.maxed then
+            love.graphics.setColor(maxedNodeColor[1], maxedNodeColor[2], maxedNodeColor[3])
+        else
+            love.graphics.setColor(defaultNodeColor[1], defaultNodeColor[2], defaultNodeColor[3])
+        end
         love.graphics.circle("fill", node.x + UI.treeOffset.x, node.y + UI.treeOffset.y, 15)
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print(node.level .. "/" .. node.maxLevel, node.x - 10 + UI.treeOffset.x, node.y - 5 + UI.treeOffset.y)
-        love.graphics.print(node.effect .. " [" .. (node.category or "N/A") .. "]", node.x - 30 + UI.treeOffset.x, node.y + 20 + UI.treeOffset.y)
-        if node.children then -- Ensure children exist
-            for _, childNode in ipairs(node.children) do
-                -- find the actual child node object from upgradeNodesTable if childNode is just an ID
-                -- For now, assuming childNode is the actual node object as per previous structure.
-                -- If childNode were an ID, you'd need to find it in upgradeNodesTable.
-                 local childTarget = nil
-                 for _, potentialChild in ipairs(upgradeNodesTable) do
-                     if potentialChild.id == childNode.id then -- or however children are referenced
-                         childTarget = potentialChild
-                         break
-                     end
-                 end
-                 -- If child references are direct objects (as they seem to be from expandTree), this lookup is not needed.
-                 -- The original code directly iterated node.children which contained objects.
-                 -- Let's assume node.children contains direct references to child node objects.
-                if childNode and childNode.x and childNode.y then -- Ensure child has coordinates
+
+        -- Set color for text
+        love.graphics.setColor(textColor[1], textColor[2], textColor[3])
+        
+        -- Level text
+        local levelStr = node.level .. "/" .. node.maxLevel
+        if node.maxed then
+            levelStr = levelStr .. " (MAXED +3)"
+        end
+        love.graphics.print(levelStr, node.x - 10 + UI.treeOffset.x, node.y - 5 + UI.treeOffset.y)
+        
+        -- Effect text
+        local effectKey = node.effect
+        local effectDisplayName = effectKey -- Fallback to the key itself
+        if effectParams and effectParams[effectKey] and effectParams[effectKey].name then
+            effectDisplayName = effectParams[effectKey].name
+        end
+        local categoryDisplayName = node.category or "N/A"
+        love.graphics.print(effectDisplayName .. " [" .. categoryDisplayName .. "]", node.x - 30 + UI.treeOffset.x, node.y + 20 + UI.treeOffset.y)
+        
+        -- Set color for lines to children
+        love.graphics.setColor(lineColor[1], lineColor[2], lineColor[3])
+        if node.children then 
+            for _, childNodeRef in ipairs(node.children) do
+                local childNode = childNodeRef 
+                if childNode and childNode.x and childNode.y then 
                     love.graphics.line(node.x + UI.treeOffset.x, node.y + UI.treeOffset.y, childNode.x + UI.treeOffset.x, childNode.y + UI.treeOffset.y)
                 end
             end
