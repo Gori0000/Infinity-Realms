@@ -57,7 +57,8 @@ function love.keypressed(key)
     
     if key == "t" then Game.changeRealm(-1, Player, Enemies) end -- Pass Player and Enemies
     if key == "y" then Game.changeRealm(1, Player, Enemies) end -- Pass Player and Enemies
-    elseif key == "c" then
+    -- Changed elseif to if for the 'c' key to make it an independent condition
+    if key == "c" then 
         Player.craftTier2Essence()
     end
     
