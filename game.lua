@@ -6,6 +6,11 @@ Game.currentRealm = 1
 Game.realms = {}
 Game.loot = {}
 
+-- Base game mechanics values
+local BASE_PROJECTILE_DAMAGE = 25
+local BASE_SHOOT_COOLDOWN = 0.25
+local MIN_SHOOT_COOLDOWN = 0.05 -- Minimum possible cooldown
+
 function Game.initializeRealms()
     Game.realms = {} 
     for i = 1, 10 do 
@@ -44,18 +49,20 @@ function Game.dropLoot(x, y, playerData)
     end
 end
 
--- Local helper function for calculating bullet damage
--- playerData here refers to Player.data passed into Game.update
+-- playerData here refers to Player.data
 local function calculateBulletDamage(bullet, playerData)
-    -- For now, damage is standard, ignoring bullet.type
-    -- Future: Add logic here based on bullet.type, enemy resistances, etc.
-    return (25 + (playerData.bonusDamage or 0) * 25) -- Ensure bonusDamage exists
+    local damageBonusPercent = (playerData.calculatedBonuses and playerData.calculatedBonuses.DMG) or 0
+    return BASE_PROJECTILE_DAMAGE * (1 + damageBonusPercent / 100)
 end
 
 function Game.update(dt, Player, Enemies, config, utils)
     -- Shooting Logic
     Game.shootCooldown = Game.shootCooldown - dt
-    local actualCooldown = 0.25 - (Player.data.bonusCooldown or 0)
+    
+    local cooldownReductionPercent = (Player.data.calculatedBonuses and Player.data.calculatedBonuses.CDR) or 0
+    local actualCooldown = BASE_SHOOT_COOLDOWN * (1 - cooldownReductionPercent / 100)
+    actualCooldown = math.max(actualCooldown, MIN_SHOOT_COOLDOWN) -- Ensure cooldown doesn't go below a minimum
+
     if love.mouse.isDown(1) and Game.shootCooldown <= 0 then
         local mx, my = love.mouse.getPosition()
         local angle = math.atan2(my - Player.data.y, mx - Player.data.x)
@@ -64,7 +71,7 @@ function Game.update(dt, Player, Enemies, config, utils)
             dx = math.cos(angle) * 400, 
             dy = math.sin(angle) * 400, 
             radius = 5,
-            type = "normal" -- Added type field
+            type = "normal" 
         })
         Game.shootCooldown = actualCooldown
     end
@@ -89,7 +96,7 @@ function Game.update(dt, Player, Enemies, config, utils)
         for j = #currentEnemies, 1, -1 do
             local e = currentEnemies[j]
             if e and utils.distance(b.x, b.y, e.x, e.y) < b.radius + e.radius then
-                local damage = calculateBulletDamage(b, Player.data) -- Use new function
+                local damage = calculateBulletDamage(b, Player.data) 
                 local enemyDied = Enemies.damageEnemy(e, damage, j, 
                     function(exp) Player.data.exp = Player.data.exp + exp end, 
                     function() Player.data.kills = Player.data.kills + 1 end, 
@@ -110,7 +117,7 @@ function Game.update(dt, Player, Enemies, config, utils)
             if not b then goto next_bullet_boss_collision end 
 
             if utils.distance(b.x, b.y, currentBoss.x, currentBoss.y) < b.radius + currentBoss.radius then
-                local damage = calculateBulletDamage(b, Player.data) -- Use new function
+                local damage = calculateBulletDamage(b, Player.data) 
                 local bossDied = Enemies.damageBoss(damage,
                     function(exp) Player.data.exp = Player.data.exp + exp end, 
                     function() Player.data.kills = Player.data.kills + 1 end, 
@@ -123,11 +130,18 @@ function Game.update(dt, Player, Enemies, config, utils)
     end
 
     -- Player EXP and Level Up
+    -- This logic might also belong in Player.updateStats() or similar if player level affects base stats
     if Player.data.exp >= Player.data.level * 100 then
         Player.data.exp = Player.data.exp - Player.data.level * 100
         Player.data.level = Player.data.level + 1
-        Player.data.maxHp = Player.data.maxHp + 10
-        Player.data.hp = Player.data.maxHp 
+        -- Note: MaxHP increase on level up is now handled by baseMaxHp potentially, or could be a direct bonus here.
+        -- For simplicity, the old direct maxHp increase on level up is kept for now.
+        -- If baseMaxHp should increase, that's a different design.
+        Player.data.maxHp = Player.data.maxHp + 10 
+        Player.data.hp = Player.data.maxHp -- Heal to full on level up
+        -- After level up, if base stats changed, bonuses might need recalculating IF they depend on level.
+        -- Upgrades.recalculatePlayerBonuses(Player, Upgrades.getNodes()) -- If level affects any upgrade formula
+        -- Player.applyCalculatedBonuses() -- Then reapply. For now, not needed by current design.
     end
 end
 

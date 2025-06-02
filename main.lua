@@ -47,7 +47,7 @@ function love.draw()
     UI.drawHUD(Player.data, Game.getPlayerRealm())
     UI.drawInventory(Player.data.gold, Player.data.essence.tier1, Player.data.essence.tier2)
     UI.drawRealmList(Game.getRealmsTable(), Game.getPlayerRealm())
-    UI.drawUpgradeTree(Upgrades.getNodes()) 
+    UI.drawUpgradeTree(Upgrades.getNodes(), Upgrades.effectParams) -- Pass effectParams
 end
 
 function love.keypressed(key)

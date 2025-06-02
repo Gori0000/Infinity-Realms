@@ -1,11 +1,39 @@
 local Upgrades = {}
 
+Upgrades.effectParams = {
+    DMG = { 
+        name = "Damage Bonus", 
+        base = 100, -- Max potential bonus percentage (e.g., 100%)
+        falloff = 0.98, 
+        unit = "%" 
+    },
+    CDR = { 
+        name = "Cooldown Reduction", 
+        base = 50,  -- Max potential CDR (e.g., 50%)
+        falloff = 0.97, 
+        unit = "%" 
+    },
+    HP_MAX = { 
+        name = "Max HP Bonus", 
+        base = 500, -- Max potential flat HP bonus
+        falloff = 0.99, 
+        unit = "flat" 
+    },
+    MOVE_SPEED = { 
+        name = "Movement Speed", 
+        base = 50,  -- Max potential speed bonus (e.g., 50%)
+        falloff = 0.98, 
+        unit = "%" 
+    }
+    -- Add more effect types as needed (e.g., CRIT_CHANCE, HEALTH_REGEN)
+}
+
 Upgrades.nodes = {}
 
 function Upgrades.categorizeNode(node)
-    if node.id % 3 == 1 then node.category = "Offense"
-    elseif node.id % 3 == 2 then node.category = "Defense"
-    else node.category = "Support" end
+    if node.id % 3 == 1 then node.category = "Offense" 
+    elseif node.id % 3 == 2 then node.category = "Defense" 
+    else node.category = "Support" end 
 end
 
 function Upgrades.recalculatePlayerBonuses(Player, nodes)
@@ -14,31 +42,46 @@ function Upgrades.recalculatePlayerBonuses(Player, nodes)
         return
     end
 
-    local totalBonusDamage = 0
-    local totalBonusCooldown = 0
-
+    -- a. Calculate totalLevels per effect type and handle maxed nodes
+    local totalLevels = {}
     for _, node in ipairs(nodes) do
-        if node.level > 0 then
-            -- Simple string matching for effects
-            if string.find(node.effect, "DMG") then
-                -- Example: "+10% DMG" node. Each level gives 1 unit to bonusDamage.
-                -- local percent = tonumber(string.match(node.effect, "(%d+)%% DMG"))
-                -- if percent then totalBonusDamage = totalBonusDamage + (node.level * (percent / 10)) end
-                totalBonusDamage = totalBonusDamage + (node.level * 1) -- Simplified: each level of a DMG node adds 1
+        node.maxed = false -- Reset maxed status
+        local effectType = node.effect
+        
+        if Upgrades.effectParams[effectType] then -- Only process known effect types
+            totalLevels[effectType] = totalLevels[effectType] or 0
+            totalLevels[effectType] = totalLevels[effectType] + node.level
+
+            if node.level == node.maxLevel then
+                node.maxed = true
+                totalLevels[effectType] = totalLevels[effectType] + 3 -- Logical bonus for maxing
             end
-            if string.find(node.effect, "CDR") then
-                -- Example: "+5% CDR" node. Each level gives 0.05 to bonusCooldown.
-                -- local percent = tonumber(string.match(node.effect, "(%d+)%% CDR"))
-                -- if percent then totalBonusCooldown = totalBonusCooldown + (node.level * (percent / 100)) end
-                totalBonusCooldown = totalBonusCooldown + (node.level * 0.05) -- Simplified: each level of a CDR node adds 0.05
-            end
-            -- Add more effect parsing here if needed
+        else
+            -- print("Warning: Unknown effect type '" .. tostring(effectType) .. "' on node ID " .. tostring(node.id))
         end
     end
 
-    Player.data.bonusDamage = totalBonusDamage
-    Player.data.bonusCooldown = totalBonusCooldown
-    -- print("Recalculated Bonuses: DMG=" .. Player.data.bonusDamage .. ", CDR=" .. Player.data.bonusCooldown)
+    -- b. Calculate final bonus values using the formula and store them
+    Player.data.calculatedBonuses = {} -- Initialize/reset the storage for calculated bonuses
+
+    for effectType, currentTotalLevel in pairs(totalLevels) do
+        local params = Upgrades.effectParams[effectType]
+        if params then 
+            local finalValue = params.base * (1 - params.falloff ^ currentTotalLevel)
+            Player.data.calculatedBonuses[effectType] = finalValue
+        end
+    end
+    
+    -- c. Remove old direct modification logic / temporary translation layer
+    -- Player.data.bonusDamage = Player.data.calculatedBonuses["DMG"] / 10 -- REMOVED
+    -- Player.data.bonusCooldown = Player.data.calculatedBonuses["CDR"] / 100 -- REMOVED
+    
+    -- Call Player.applyCalculatedBonuses() to update actual player stats
+    if Player.applyCalculatedBonuses then
+        Player.applyCalculatedBonuses()
+    else
+        print("Warning: Player.applyCalculatedBonuses function not found on Player object.")
+    end
 end
 
 function Upgrades.initializeTree()
@@ -47,10 +90,10 @@ function Upgrades.initializeTree()
         id = 1, 
         x = 400, y = 300, 
         level = 0, maxLevel = 10, 
-        effect = "+10% DMG", -- Specific effect for root
+        effect = "DMG", 
         children = {}
     }
-    Upgrades.categorizeNode(root)
+    Upgrades.categorizeNode(root) 
     table.insert(Upgrades.nodes, root)
 end
 
@@ -74,26 +117,26 @@ function Upgrades.expandTree(nodeToExpand)
     
     if #actualNode.children == 0 then 
         local angleStep = math.pi / 4 
-        local effects = {"+10% DMG", "+5% CDR"} -- Specific effects for new children
+        local childEffects = {"DMG", "CDR"} 
 
         for i = 1, 2 do
             local angle = angleStep * i
+            local newId = #Upgrades.nodes + 1
             local newNode = {
-                id = #Upgrades.nodes + 1, 
+                id = newId, 
                 x = actualNode.x + math.cos(angle) * 100,
                 y = actualNode.y + math.sin(angle) * 100,
                 level = 0, maxLevel = 10,
-                effect = effects[i] or "Default Effect " .. (#Upgrades.nodes + 1), -- Assign specific effect
+                effect = childEffects[i] or "DMG", 
                 children = {}
             }
-            Upgrades.categorizeNode(newNode)
+            Upgrades.categorizeNode(newNode) 
             table.insert(actualNode.children, newNode) 
             table.insert(Upgrades.nodes, newNode)   
         end
     end
 end
 
--- Modified to accept Player and call recalculatePlayerBonuses
 function Upgrades.upgradeNode(nodeId, Player)
     local nodeToUpgrade = nil
     if nodeId >= 1 and nodeId <= #Upgrades.nodes then
@@ -103,7 +146,7 @@ function Upgrades.upgradeNode(nodeId, Player)
     if nodeToUpgrade and nodeToUpgrade.level < nodeToUpgrade.maxLevel then
         nodeToUpgrade.level = nodeToUpgrade.level + 1
         
-        Upgrades.recalculatePlayerBonuses(Player, Upgrades.nodes) -- Recalculate bonuses
+        Upgrades.recalculatePlayerBonuses(Player, Upgrades.nodes) 
         
         if nodeToUpgrade.level == nodeToUpgrade.maxLevel then
             Upgrades.expandTree(nodeToUpgrade) 
