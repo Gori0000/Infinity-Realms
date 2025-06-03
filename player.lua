@@ -11,44 +11,47 @@ Player.data = {
     exp = 0, level = 1, kills = 0,
     gold = 0, essence = {tier1 = 0, tier2 = 0},
     calculatedBonuses = {},
-    facingDirection = "S" -- Default facing direction
+    facingDirection = "S"
 }
 
-Player.quads = {} -- To store animation frames
+Player.quads = {}
 
 function Player.initializeAnimation(playerSheetAsset)
-    Player.quads = {} -- Clear previous quads
+    Player.quads = {}
     if not playerSheetAsset then
-        print("Warning: Player spritesheet asset is missing for Player.initializeAnimation.")
+        print("Error in Player.initializeAnimation: playerSheetAsset is nil. Cannot create quads.")
+        Player.quads["DEFAULT"] = nil -- Explicitly mark as problematic
         return
     end
 
     local sheetWidth = playerSheetAsset:getWidth()
     local sheetHeight = playerSheetAsset:getHeight()
 
-    -- Assuming a 3x3 grid for 8 directions + idle (center often idle/down)
-    -- If wizard_spritesheet.png is 256x256, then frameWidth/Height is ~85.33
+    if sheetWidth == 0 or sheetHeight == 0 then
+        print("Error in Player.initializeAnimation: playerSheetAsset dimensions are zero. Spritesheet W/H:", sheetWidth, sheetHeight)
+        Player.quads["DEFAULT"] = nil
+        return
+    end
+
     local frameWidth = sheetWidth / 3
     local frameHeight = sheetHeight / 3
 
-    -- (x, y, width, height, sourceWidth, sourceHeight)
-    -- Row 1 (Upward movements)
+    if frameWidth <= 0 or frameHeight <= 0 then
+        print("Error in Player.initializeAnimation: Calculated frameWidth or frameHeight is zero or negative. frameW:", frameWidth, "frameH:", frameHeight)
+        Player.quads["DEFAULT"] = nil
+        return
+    end
+
     Player.quads["NW"] = love.graphics.newQuad(0, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
     Player.quads["N"]  = love.graphics.newQuad(frameWidth, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
     Player.quads["NE"] = love.graphics.newQuad(frameWidth * 2, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
-
-    -- Row 2 (Sideways movements and often Idle/South)
     Player.quads["W"]  = love.graphics.newQuad(0, frameHeight, frameWidth, frameHeight, sheetWidth, sheetHeight)
-    Player.quads["S"]  = love.graphics.newQuad(frameWidth, frameHeight, frameWidth, frameHeight, sheetWidth, sheetHeight) -- Default/Idle to South
+    Player.quads["S"]  = love.graphics.newQuad(frameWidth, frameHeight, frameWidth, frameHeight, sheetWidth, sheetHeight)
     Player.quads["E"]  = love.graphics.newQuad(frameWidth * 2, frameHeight, frameWidth, frameHeight, sheetWidth, sheetHeight)
-
-    -- Row 3 (Downward movements)
     Player.quads["SW"] = love.graphics.newQuad(0, frameHeight * 2, frameWidth, frameHeight, sheetWidth, sheetHeight)
-    -- Assuming the center-bottom quad is also a valid "S" or an alternative S. If it's part of an animation, that's for later.
-    -- Player.quads["S_ALT"] = love.graphics.newQuad(frameWidth, frameHeight * 2, frameWidth, frameHeight, sheetWidth, sheetHeight)
     Player.quads["SE"] = love.graphics.newQuad(frameWidth * 2, frameHeight * 2, frameWidth, frameHeight, sheetWidth, sheetHeight)
 
-    Player.quads["DEFAULT"] = Player.quads["S"] -- Fallback quad
+    Player.quads["DEFAULT"] = Player.quads["S"]
     print("Player animation quads initialized. Frame W/H:", frameWidth, frameHeight)
 end
 
@@ -78,14 +81,12 @@ function Player.update(dt)
 
     if dx ~= 0 or dy ~= 0 then
         local moveSpeed = Player.data.speed * dt
-        -- Normalize diagonal movement (optional, but good practice)
         if dx ~= 0 and dy ~= 0 then
-            moveSpeed = moveSpeed * 0.70710678118 -- approx 1/sqrt(2)
+            moveSpeed = moveSpeed * 0.70710678118
         end
         Player.data.x = Player.data.x + dx * moveSpeed
         Player.data.y = Player.data.y + dy * moveSpeed
 
-        -- Update facing direction based on movement vector
         if dx == 0 and dy == -1 then Player.data.facingDirection = "N"
         elseif dx == 1 and dy == -1 then Player.data.facingDirection = "NE"
         elseif dx == 1 and dy == 0 then Player.data.facingDirection = "E"
@@ -96,49 +97,76 @@ function Player.update(dt)
         elseif dx == -1 and dy == -1 then Player.data.facingDirection = "NW"
         end
     end
-    -- If no movement (dx==0 and dy==0), facingDirection remains as it was.
 end
 
 function Player.draw()
-    if Assets and Assets.player_spritesheet and Config and Player.quads then
-        local playerImage = Assets.player_spritesheet
-        local currentQuad = Player.quads[Player.data.facingDirection] or Player.quads["DEFAULT"]
-
-        if not currentQuad then
-             print("Warning: Player quad not found for direction: " .. Player.data.facingDirection .. ". Using default.")
-             currentQuad = Player.quads["DEFAULT"]
-        end
-
-        if currentQuad then
-            local frameWidth = currentQuad:getViewport():getWidth()
-            local frameHeight = currentQuad:getViewport():getHeight()
-
-            love.graphics.setColor(1, 1, 1)
-            love.graphics.draw(
-                playerImage,
-                currentQuad,
-                Player.data.x,
-                Player.data.y,
-                0, -- rotation
-                Config.playerScale,
-                Config.playerScale,
-                frameWidth / 2,    -- origin from frame dimensions
-                frameHeight / 2     -- origin from frame dimensions
-            )
-        else
-            -- This specific 'else' might be redundant if Player.quads["DEFAULT"] is always valid after init
-            print("Error: Default player quad is missing.")
-            love.graphics.setColor(0, 1, 1)
-            love.graphics.circle("fill", Player.data.x, Player.data.y, Player.data.radius)
-        end
-    else
-        if not Config then print("Warning: Config not available in Player.draw for scaling.") end
-        if not (Assets and Assets.player_spritesheet) then print("Warning: Player sprite not found in Assets.") end
-        if not Player.quads then print("Warning: Player.quads not initialized.") end
+    if not (Assets and Assets.player_spritesheet and Config and Player.quads) then
+        if not Config then print("Warning (Player.draw): Config not available for scaling.") end
+        if not (Assets and Assets.player_spritesheet) then print("Warning (Player.draw): Player sprite not found in Assets.") end
+        if not Player.quads then print("Warning (Player.draw): Player.quads not initialized.") end
 
         love.graphics.setColor(0, 1, 1)
-        love.graphics.circle("fill", Player.data.x, Player.data.y, Player.data.radius)
+        love.graphics.circle("fill", Player.data.x, Player.data.y, Player.data.radius or 15)
+        love.graphics.setColor(1, 1, 1)
+        return
     end
+
+    local playerImage = Assets.player_spritesheet
+    local currentDirection = Player.data.facingDirection
+    local quadCandidate = Player.quads[currentDirection]
+
+    if type(quadCandidate) ~= "userdata" then
+        print("Warning (Player.draw): Quad for direction '" .. tostring(currentDirection) .. "' is not a valid Quad object. Type: " .. type(quadCandidate) .. ". Attempting DEFAULT.")
+        quadCandidate = Player.quads["DEFAULT"]
+    end
+
+    if type(quadCandidate) ~= "userdata" then
+        print("Error (Player.draw): DEFAULT quad is also not a valid Quad object. Type: " .. type(quadCandidate) .. ". Drawing fallback circle.")
+        love.graphics.setColor(0, 1, 1)
+        love.graphics.circle("fill", Player.data.x, Player.data.y, Player.data.radius or 15)
+        love.graphics.setColor(1, 1, 1)
+        return
+    end
+
+    local currentQuad = quadCandidate
+    local frameWidth = 0
+    local frameHeight = 0
+
+    local vp_status, vp_w_or_err, vp_h = pcall(function()
+        local x,y,w,h = currentQuad:getViewport()
+        return w,h
+    end)
+
+    if not vp_status then
+        print("Error (Player.draw): Failed to get viewport dimensions from currentQuad. Quad may be invalid. Error: " .. tostring(vp_w_or_err))
+        love.graphics.setColor(0, 1, 1)
+        love.graphics.circle("fill", Player.data.x, Player.data.y, Player.data.radius or 15)
+        love.graphics.setColor(1, 1, 1)
+        return
+    end
+    frameWidth = vp_w_or_err
+    frameHeight = vp_h
+
+    if frameWidth == 0 or frameHeight == 0 then
+         print("Error (Player.draw): currentQuad has zero width or height. Quad Viewport: ", currentQuad:getViewport())
+        love.graphics.setColor(0, 1, 1)
+        love.graphics.circle("fill", Player.data.x, Player.data.y, Player.data.radius or 15)
+        love.graphics.setColor(1, 1, 1)
+        return
+    end
+
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(
+        playerImage,
+        currentQuad,
+        Player.data.x,
+        Player.data.y,
+        0,
+        (Config and Config.playerScale) or 0.5,
+        (Config and Config.playerScale) or 0.5,
+        frameWidth / 2,
+        frameHeight / 2
+    )
 end
 
 function Player.craftTier2Essence()
