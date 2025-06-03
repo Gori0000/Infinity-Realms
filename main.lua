@@ -6,7 +6,9 @@ function love.load()
 
     love.window.setTitle(Config.windowTitle)
     love.window.setMode(Config.windowWidth, Config.windowHeight)
-    font = love.graphics.newFont(Config.fontSize)
+    -- Use baseFontSize and uiScaleFactor for font creation
+    local effectiveFontSize = (Config.baseFontSize or 14) * (Config.uiScaleFactor or 1)
+    font = love.graphics.newFont(math.floor(effectiveFontSize)) -- Ensure integer font size
     love.graphics.setFont(font)
 
     -- Load game logic modules
@@ -20,7 +22,11 @@ function love.load()
     Enemies.initialize()
     Upgrades.initializeTree()
     Game.initializeRealms()
-    -- Player.initialize() if exists
+    if Player.initializeAnimation and Assets.player_spritesheet then
+        Player.initializeAnimation(Assets.player_spritesheet)
+    elseif Player.initializeAnimation then
+        print("Warning: Assets.player_spritesheet not available for Player.initializeAnimation.")
+    end
     -- UI.initialize() if exists
     Upgrades.recalculatePlayerBonuses(Player, Upgrades.getNodes()) -- Initial bonus calculation
 end

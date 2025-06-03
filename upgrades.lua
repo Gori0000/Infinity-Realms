@@ -31,9 +31,7 @@ Upgrades.effectParams = {
 Upgrades.nodes = {}
 
 function Upgrades.categorizeNode(node)
-    -- This function is primarily for nodes whose category isn't set by inheritance.
-    -- Or, it could be a fallback if a parent node somehow has no category.
-    if not node.category then -- Only categorize if not already set (e.g. by inheritance)
+    if not node.category then
         if node.id % 3 == 1 then node.category = "Offense"
         elseif node.id % 3 == 2 then node.category = "Defense"
         else node.category = "Support" end
@@ -81,11 +79,16 @@ end
 
 function Upgrades.initializeTree()
     Upgrades.nodes = {}
+
+    local uiScale = (Config and Config.uiScaleFactor) or 1
+    if not Config then print("Warning: Global Config not found in Upgrades.initializeTree, using uiScale=1") end
+
     local centerX = (Config and Config.windowWidth or 1920) / 2
     local centerY = (Config and Config.windowHeight or 1080) / 2
-    local initialNodeYOffset = 200
-    local initialNodeXOffset = 250
-    local supportNodeYDisplacement = 200
+
+    local initialNodeYOffset = 200 * uiScale
+    local initialNodeXOffset = 250 * uiScale
+    local supportNodeYDisplacement = 200 * uiScale
 
     local offenseNode = {
         id = 1, x = centerX - initialNodeXOffset, y = centerY - initialNodeYOffset,
@@ -98,22 +101,26 @@ function Upgrades.initializeTree()
         children = {}, maxed = false
     }
     local supportNode = {
-        id = 3, x = centerX, y = centerY - initialNodeYOffset + supportNodeYDisplacement,
+        id = 3, x = centerX, y = (centerY - initialNodeYOffset) + supportNodeYDisplacement, -- Ensure Y is relative to initial line
         level = 0, maxLevel = 10, effect = "CDR", category = "Support",
         children = {}, maxed = false
     }
+
     table.insert(Upgrades.nodes, offenseNode)
     table.insert(Upgrades.nodes, defenseNode)
     table.insert(Upgrades.nodes, supportNode)
 end
 
-function Upgrades.expandTree(nodeToExpand) -- nodeToExpand is the parent node object
+function Upgrades.expandTree(nodeToExpand)
     if not nodeToExpand then print("Error: expandTree called with nil nodeToExpand."); return end
+
+    local uiScale = (Config and Config.uiScaleFactor) or 1
+    if not Config then print("Warning: Global Config not found in Upgrades.expandTree, using uiScale=1") end
 
     print("Attempting to expand node ID:", nodeToExpand.id, "Category:", nodeToExpand.category, "at (", nodeToExpand.x, ",", nodeToExpand.y, ")")
 
     local parentNode = nodeToExpand
-    local distance = 100
+    local distance = 100 * uiScale -- Scale expansion distance
     local targetX, targetY
 
     if parentNode.category == "Offense" then
@@ -129,11 +136,12 @@ function Upgrades.expandTree(nodeToExpand) -- nodeToExpand is the parent node ob
     print("  Targeting new child at (", targetX, ",", targetY, ")")
 
     local collisionDetected = false
-    local nodeVisualRadius = 15
-    local minSpacing = (nodeVisualRadius * 2) + 15 -- Diameter + 15px buffer (total 45)
+    local nodeVisualRadius = 15 * uiScale -- Scale node radius for collision check
+    local buffer = 10 * uiScale           -- Scale buffer
+    local minSpacing = (nodeVisualRadius * 2) + buffer
 
     for _, existingNode in ipairs(Upgrades.nodes) do
-        if existingNode.id == parentNode.id then goto continue_check end -- Don't check collision with self
+        if existingNode.id == parentNode.id then goto continue_check end
 
         if utils.distance(targetX, targetY, existingNode.x, existingNode.y) < minSpacing then
             collisionDetected = true
@@ -159,11 +167,10 @@ function Upgrades.expandTree(nodeToExpand) -- nodeToExpand is the parent node ob
             level = 0,
             maxLevel = 10,
             effect = effectKey,
-            category = parentNode.category, -- Child inherits parent's category
+            category = parentNode.category,
             children = {},
             maxed = false
         }
-        -- Upgrades.categorizeNode(newNode) -- No longer needed here due to inheritance
 
         table.insert(parentNode.children, newNode)
         table.insert(Upgrades.nodes, newNode)
