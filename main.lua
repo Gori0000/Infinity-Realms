@@ -36,6 +36,12 @@ function love.load()
 end
 
 function love.update(dt)
+    if UI.state.showPauseMenu then
+        -- Game is paused, no game logic updates
+        return
+    end
+
+    -- If not paused, proceed with other game logic:
     if not UI.state.showUpgradeTree then
         Player.update(dt) -- Update player input and state first
 
@@ -50,8 +56,8 @@ function love.update(dt)
         Game.update(dt, Player, Enemies, Config, utils) -- Pass global Config
     end
 
-    -- Continuous camera movement for upgrade tree
-    if UI.state.showUpgradeTree then -- Check if tree is visible
+    -- Continuous camera movement for upgrade tree (only if tree is visible and game not paused)
+    if UI.state.showUpgradeTree then -- Check if tree is visible (implicitly not paused due to check above)
         local moveAmount = upgradeTreeCameraSpeed * dt
         if love.keyboard.isDown("left") then
             UI.moveUpgradeTreeCamera(-moveAmount, 0) -- To see left, decrease offset.x
@@ -79,6 +85,7 @@ function love.draw()
     UI.drawRealmList(Game.getRealmsTable(), Game.getPlayerRealm())
     UI.drawUpgradeTree(Upgrades.getNodes(), Upgrades.effectParams) -- Pass effectParams
     UI.drawStatsMenu(Player.data) -- Add this line
+    UI.drawPauseMenu() -- Draw pause menu on top
 end
 
 function love.keypressed(key)
@@ -110,27 +117,58 @@ function love.keypressed(key)
     if key == "k" then -- Or any preferred key
         UI.toggleStatsMenu()
     end
+
+    if key == "escape" then
+        UI.togglePauseMenu()
+    end
 end
 
 function love.mousepressed(x, y, button)
-    if button == 1 and UI.state.showUpgradeTree then
-        local currentNodes = Upgrades.getNodes()
-        local treeZoom = UI.treeZoom or 1.0
-        local uiScale = (Config and Config.uiScaleFactor) or 1 -- Ensure Config is accessible or use a fallback
-        local nodeRadius = 15 * uiScale -- This is base radius in world units for unzoomed view
+    if button == 1 then
+        if UI.state.showPauseMenu then
+            -- UI.pauseMenuButtons is populated by UI.drawPauseMenu
+            if UI.pauseMenuButtons then
+                for _, btn in ipairs(UI.pauseMenuButtons) do
+                    if x >= btn.x and x <= btn.x + btn.w and y >= btn.y and y <= btn.y + btn.h then
+                        if btn.label == "Continue" then
+                            UI.togglePauseMenu()
+                        elseif btn.label == "Settings" then
+                            print("Settings clicked - Placeholder") -- Placeholder
+                        elseif btn.label == "Credits" then
+                            print("Credits clicked - Placeholder") -- Placeholder
+                        elseif btn.label == "Quit" then
+                            love.event.quit()
+                        end
+                        return -- Click handled by pause menu
+                    end
+                end
+            end
+            return -- Click was on the overlay but not on a button, consume it
+        end
+
+        -- If not paused, check other UI elements (e.g., Upgrade Tree)
+        if UI.state.showUpgradeTree then
+            local currentNodes = Upgrades.getNodes()
+            local treeZoom = UI.treeZoom or 1.0 -- Ensure fallback if not set
+        local treeOffsetX = UI.treeOffset and UI.treeOffset.x or 0
+        local treeOffsetY = UI.treeOffset and UI.treeOffset.y or 0
+
+        local screenWidth = love.graphics.getWidth()
+        local screenHeight = love.graphics.getHeight()
+
+        -- Apply inverse transformation to mouse coordinates
+        love.graphics.push()
+        love.graphics.translate(screenWidth / 2, screenHeight / 2)
+        love.graphics.scale(treeZoom, treeZoom)
+        love.graphics.translate(-screenWidth / 2 + treeOffsetX, -screenHeight / 2 + treeOffsetY)
+        local worldX, worldY = love.graphics.inverseTransformPoint(x, y)
+        love.graphics.pop()
+
+        local nodeRadius = 15 -- Base model radius in world coordinates
 
         local clickedOnNode = false
         for idx, node_obj in ipairs(currentNodes) do
-            -- Placeholder for transformed node coords - THIS WILL BE FIXED ACCURATELY IN STEP 9 (Zoom implementation)
-            -- This is a very rough approximation for screen-space collision detection
-            -- It does not correctly account for the order of transforms (translate, scale) used in drawing.
-            -- The term (node_obj.x * treeZoom + UI.treeOffset.x) assumes offset is screen space and applied after zoom centered at origin.
-            -- A more typical drawing order might be: translate_to_center, scale, translate_by_offset, draw_node_at_world_x_y
-            local approxScreenNodeX = (node_obj.x) * treeZoom + UI.treeOffset.x
-            local approxScreenNodeY = (node_obj.y) * treeZoom + UI.treeOffset.y
-            local approxScaledRadius = nodeRadius * treeZoom
-
-            if utils.distance(x, y, approxScreenNodeX, approxScreenNodeY) <= approxScaledRadius then
+            if utils.distance(worldX, worldY, node_obj.x, node_obj.y) <= nodeRadius then
                 Upgrades.upgradeNode(idx, Player)
                 clickedOnNode = true
                 break
@@ -139,7 +177,7 @@ function love.mousepressed(x, y, button)
 
         if not clickedOnNode then
             isDraggingTree = true
-            lastMouseX, lastMouseY = x,y -- Store initial position
+            lastMouseX, lastMouseY = x, y -- Store initial position for dragging
         end
     end
 end

@@ -24,7 +24,7 @@ function Enemies.spawnRegularEnemy(realmNumber)
     local initialHp = 30 * mult
     table.insert(Enemies.list, {
         x = x, y = y,
-        radius = 12,
+        radius = 24,
         speed = 60,
         hp = initialHp,
         maxHp = initialHp, -- Add this line
@@ -36,7 +36,7 @@ end
 function Enemies.spawnBoss()
     local initialBossHp = 1000
     Enemies.boss = {
-        x = 400, y = 50, radius = 40, speed = 40,
+        x = 400, y = 50, radius = 60, speed = 40,
         hp = initialBossHp,
         maxHp = initialBossHp, -- Add this line
         exp = 500,
