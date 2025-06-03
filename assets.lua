@@ -1,47 +1,43 @@
 local Assets = {}
 
--- Path prefix for convenience
-local gfxPath = "assets/graphics/" -- Assuming all graphics are in this subfolder
+local gfxPath = "assets/graphics/"
+
+local function loadImage(path)
+    local fullPath = gfxPath .. path
+    local status_ok, image_or_error = pcall(love.graphics.newImage, fullPath)
+    if status_ok then
+        return image_or_error
+    else
+        print("Warning: Failed to load image at '" .. fullPath .. "'. Error: " .. tostring(image_or_error))
+        return nil
+    end
+end
 
 -- Player
--- Assuming a single spritesheet for the player. Animation/quads will be handled later.
-Assets.player_spritesheet = love.graphics.newImage(gfxPath .. "wizard_spritesheet.png")
+Assets.player_spritesheet = loadImage("wizard_spritesheet.png")
 
 -- Projectiles
-Assets.projectile_blue = love.graphics.newImage(gfxPath .. "projectile_blue.png")
+Assets.projectile_blue = loadImage("projectile_blue.png")
 
--- Enemies (store them in a sub-table for organization)
+-- Enemies
 Assets.enemies = {
-    slime = love.graphics.newImage(gfxPath .. "slime.png"),
-    skeleton = love.graphics.newImage(gfxPath .. "skeleton.png"),
-    bird = love.graphics.newImage(gfxPath .. "bird.png"),
-    zombie = love.graphics.newImage(gfxPath .. "zombie.png"),
-    treant = love.graphics.newImage(gfxPath .. "treant.png")
+    slime = loadImage("slime.png"),
+    skeleton = loadImage("skeleton.png"),
+    bird = loadImage("bird.png"),
+    zombie = loadImage("zombie.png"),
+    treant = loadImage("treant.png")
 }
 
--- Loot (store in a sub-table)
+-- Loot
 Assets.loot = {
-    coin = love.graphics.newImage(gfxPath .. "coin.png"),
-    essence_t1 = love.graphics.newImage(gfxPath .. "essence_green.png"), -- Mapping tier1 to green
-    -- essence_t2 = love.graphics.newImage(gfxPath .. "essence_blue.png") -- Example if a blue essence existed
+    coin = loadImage("coin.png"),
+    essence_t1 = loadImage("essence_green.png")
+    -- essence_t2 will be handled by fallback color in Game.draw() as it has no sprite
 }
 
--- UI elements or other specific assets can be added here as needed
--- Example:
+-- Example for UI or other assets if they were images:
 -- Assets.ui = {
---    inventory_panel = love.graphics.newImage(gfxPath .. "inventory_panel.png")
+--    inventory_panel = loadImage("inventory_panel.png")
 -- }
-
--- Upgrade Tree Node Orbs:
--- The prompt indicates these are primarily color-coded circles drawn directly.
--- If specific images were to be used for different node states (e.g., maxed, category),
--- they would be loaded here like:
--- Assets.node_orbs = {
---     offense = love.graphics.newImage(gfxPath .. "orb_red.png"),
---     defense = love.graphics.newImage(gfxPath .. "orb_blue.png"),
---     support = love.graphics.newImage(gfxPath .. "orb_green.png"),
---     maxed_overlay = love.graphics.newImage(gfxPath .. "orb_max_overlay.png")
--- }
--- For now, this section is illustrative, as direct drawing with colors is used.
 
 return Assets
