@@ -270,9 +270,9 @@ function love.mousepressed(x, y, button)
         if not clickedOnNode then
             isDraggingTree = true
             lastMouseX, lastMouseY = x, y -- Store initial position for dragging
-        end
-    end -- Closes 'if button == 1 then'
-end
+        end -- This end closes 'if UI.state.showUpgradeTree then'
+    end -- This end closes 'if button == 1 then'
+end -- This end closes 'function love.mousepressed'
 
 function love.mousereleased(x, y, button)
     if button == 1 then
