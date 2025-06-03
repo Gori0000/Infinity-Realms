@@ -12,7 +12,9 @@ Player.data = {
     gold = 0, essence = {tier1 = 0, tier2 = 0},
     calculatedBonuses = {},
     facingDirection = "S",
-    skillPoints = 10000 -- Add this line
+    skillPoints = 10000, -- Add this line
+    spells = {},
+    spellUpgradePoints = 0
 }
 
 Player.quads = {}
@@ -104,6 +106,43 @@ function Player.update(dt)
         elseif dx == -1 and dy == -1 then Player.data.facingDirection = "NW"
         end
     end
+
+    -- Update spell cooldowns
+    if Player.data.spells then
+        for i, spell in ipairs(Player.data.spells) do
+            if spell and spell.currentCooldown > 0 then
+                spell.currentCooldown = math.max(0, spell.currentCooldown - dt)
+            end
+        end
+    end
+end
+
+function Player.castSpell(slotIndex, targetX, targetY)
+    if not Player.data.spells or not Player.data.spells[slotIndex] then
+        -- print("Player.castSpell: No spell in slot " .. slotIndex)
+        return false
+    end
+
+    local spell = Player.data.spells[slotIndex]
+
+    if spell.currentCooldown > 0 then
+        -- print("Player.castSpell: Spell " .. spell.name .. " on cooldown: " .. string.format("%.2f", spell.currentCooldown))
+        return false
+    end
+
+    -- print("Player.castSpell: Casting " .. spell.name)
+    spell.currentCooldown = spell.calculatedCooldown
+
+    -- Game.triggerSpellEffect will be responsible for creating the actual spell effect in the game world
+    if Game and Game.triggerSpellEffect then
+        Game.triggerSpellEffect(Player.data, spell, targetX, targetY)
+        return true
+    else
+        print("Player.castSpell: Error - Game.triggerSpellEffect not found!")
+        -- Reset cooldown if Game module isn't available, to prevent locking out player
+        spell.currentCooldown = 0
+        return false
+    end
 end
 
 function Player.draw()
@@ -185,6 +224,64 @@ function Player.craftTier2Essence()
     else
         print("Not enough Tier 1 Essences to craft. Need 5. Current T1: " .. Player.data.essence.tier1)
         return false
+    end
+end
+
+function Player.initializeSpells(spellsDataDefinitions)
+    Player.data.spells = {} -- Clear and initialize
+    -- Player.data.spellUpgradePoints = 0 -- This is set to 0 in Player.data initial definition
+
+    local spellIds = {} -- Get spell IDs in a defined order
+    if spellsDataDefinitions then
+        for id, _ in pairs(spellsDataDefinitions) do
+            table.insert(spellIds, id)
+        end
+        -- Sort IDs alphabetically for some consistency if pairs() order varies
+        table.sort(spellIds)
+    end
+
+    local numSlots = 5
+    for i = 1, numSlots do
+        local spellId = spellIds[i] -- Get the i-th spell ID from the sorted list
+        if spellId and spellsDataDefinitions and spellsDataDefinitions[spellId] then
+            local baseSpellData = spellsDataDefinitions[spellId]
+
+            -- Shallow copy for effects table
+            local newEffects = {}
+            if baseSpellData.effects then
+                for _, eff_val in ipairs(baseSpellData.effects) do
+                    table.insert(newEffects, eff_val)
+                end
+            end
+
+            Player.data.spells[i] = {
+                id = spellId,
+                name = baseSpellData.name,
+                icon = baseSpellData.icon,
+                type = baseSpellData.type,
+                effects = newEffects,
+
+                currentCooldown = 0,
+                level = 0,
+                upgrades = {}, -- For specific upgrade node levels of this spell
+
+                -- Base stats (also store them for reference if needed for upgrades)
+                baseDamage = baseSpellData.baseDamage,
+                baseCooldown = baseSpellData.cooldown,
+                baseRange = baseSpellData.range,
+                baseAoeRadius = baseSpellData.aoeRadius,
+                basePierce = baseSpellData.pierce,
+
+                -- Calculated stats (initially same as base)
+                calculatedDamage = baseSpellData.baseDamage,
+                calculatedCooldown = baseSpellData.cooldown,
+                calculatedRange = baseSpellData.range,
+                calculatedAoeRadius = baseSpellData.aoeRadius,
+                calculatedPierce = baseSpellData.pierce
+            }
+        else
+            Player.data.spells[i] = nil -- No spell for this slot
+        end
     end
 end
 
