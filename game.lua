@@ -35,29 +35,26 @@ function Game.getRealmsTable()
 end
 
 function Game.dropLoot(x, y, playerData)
-    -- Player.data modification remains the same
     if math.random() < 0.5 then
         playerData.gold = playerData.gold + 1
-        table.insert(Game.loot, {x=x,y=y, type="coin", radius=8}) -- Use "coin", set a default radius
+        table.insert(Game.loot, {x=x,y=y, type="coin", radius=8})
     end
     if math.random() < 0.05 then
         playerData.essence.tier1 = playerData.essence.tier1 + 1
-        table.insert(Game.loot, {x=x,y=y, type="essence_t1", radius=8}) -- Use "essence_t1"
+        table.insert(Game.loot, {x=x,y=y, type="essence_t1", radius=8})
     end
     if math.random() < 0.02 then
         playerData.essence.tier2 = playerData.essence.tier2 + 1
-        table.insert(Game.loot, {x=x,y=y, type="essence_t2", radius=8}) -- Keep as "essence_t2"
+        table.insert(Game.loot, {x=x,y=y, type="essence_t2", radius=8})
     end
 end
 
--- playerData here refers to Player.data
 local function calculateBulletDamage(bullet, playerData)
     local damageBonusPercent = (playerData.calculatedBonuses and playerData.calculatedBonuses.DMG) or 0
     return BASE_PROJECTILE_DAMAGE * (1 + damageBonusPercent / 100)
 end
 
 function Game.update(dt, Player, Enemies, config, utils)
-    -- Shooting Logic
     Game.shootCooldown = Game.shootCooldown - dt
 
     local cooldownReductionPercent = (Player.data.calculatedBonuses and Player.data.calculatedBonuses.CDR) or 0
@@ -77,7 +74,6 @@ function Game.update(dt, Player, Enemies, config, utils)
         Game.shootCooldown = actualCooldown
     end
 
-    -- Bullet Update & Boundary Checks
     for i = #Game.bullets, 1, -1 do
         local b = Game.bullets[i]
         if b then
@@ -88,7 +84,6 @@ function Game.update(dt, Player, Enemies, config, utils)
         end
     end
 
-    -- Bullet-Enemy Collision
     for i = #Game.bullets, 1, -1 do
         local b = Game.bullets[i]
         if not b then goto next_bullet_enemy_collision end
@@ -110,7 +105,6 @@ function Game.update(dt, Player, Enemies, config, utils)
         ::next_bullet_enemy_collision::
     end
 
-    -- Bullet-Boss Collision
     local currentBoss = Enemies.getBoss()
     if currentBoss then
         for i = #Game.bullets, 1, -1 do
@@ -139,7 +133,6 @@ function Game.update(dt, Player, Enemies, config, utils)
 end
 
 function Game.draw()
-    -- Draw bullets
     if Assets and Assets.projectile_blue then
         local projectileImage = Assets.projectile_blue
         local pWidth = projectileImage:getWidth()
@@ -149,7 +142,9 @@ function Game.draw()
             love.graphics.draw(projectileImage, b.x, b.y, 0, 1, 1, pWidth / 2, pHeight / 2)
         end
     else
-        print("Warning: Assets.projectile_blue is missing. Drawing circles for bullets.")
+        if Assets then -- Check if Assets table itself exists, even if projectile_blue doesn't
+            print("Warning: Assets.projectile_blue is missing. Drawing circles for bullets.")
+        end
         love.graphics.setColor(1, 1, 0)
         for _, b in ipairs(Game.bullets) do
             love.graphics.circle("fill", b.x, b.y, b.radius or 5)
@@ -157,28 +152,31 @@ function Game.draw()
     end
     love.graphics.setColor(1, 1, 1)
 
-    -- Draw loot
     for _, l in ipairs(Game.loot) do
-        local lootImage = Assets.loot[l.type] -- Try to get specific sprite (e.g., Assets.loot.coin)
+        local lootImage = Assets.loot and Assets.loot[l.type] -- Check Assets.loot exists
+
         if lootImage then
-            love.graphics.setColor(1, 1, 1) -- Ensure sprite is not tinted
+            love.graphics.setColor(1, 1, 1)
             local lWidth = lootImage:getWidth()
             local lHeight = lootImage:getHeight()
             love.graphics.draw(lootImage, l.x, l.y, 0, 1, 1, lWidth / 2, lHeight / 2)
         else
-            -- Fallback for types without specific sprites
-            if l.type == "essence_t2" then
-                love.graphics.setColor(0.2, 0.5, 1) -- Blue for Tier 2 essence
-                love.graphics.circle("fill", l.x, l.y, l.radius or 5)
-            else
-                -- Fallback for any other unknown loot type
-                love.graphics.setColor(1, 0, 1) -- Magenta
-                love.graphics.circle("fill", l.x, l.y, l.radius or 5)
-                print("Warning: Missing sprite for loot type: " .. (l.type or "unknown") .. ". Drawing magenta circle.")
+            if Assets and Assets.loot then -- Only print warning if Assets.loot table itself was expected
+                 print("Info: No sprite for loot type: " .. (l.type or "unknown") .. ". Drawing fallback circle.")
             end
+            if l.type == "coin" then
+                love.graphics.setColor(1, 0.84, 0) -- Gold/Yellow for coin fallback
+            elseif l.type == "essence_t1" then
+                love.graphics.setColor(0, 1, 0) -- Green for Tier 1 essence fallback
+            elseif l.type == "essence_t2" then
+                love.graphics.setColor(0.2, 0.5, 1) -- Blue for Tier 2 essence (current design)
+            else
+                love.graphics.setColor(1, 0, 1) -- Magenta for other unknown loot types
+            end
+            love.graphics.circle("fill", l.x, l.y, l.radius or 5)
         end
     end
-    love.graphics.setColor(1, 1, 1) -- Reset color after drawing all loot
+    love.graphics.setColor(1, 1, 1)
 end
 
 function Game.resetForNewRealm(Player, Enemies)
