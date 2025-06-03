@@ -163,7 +163,7 @@ function love.keypressed(key)
     end
 end
 
-function love.mousepressed(x, y, button)
+function love.mousepressed(x, y, button) -- Function definition starts here (around line 166)
     if button == 1 then
         if UI.state.showPauseMenu then
             -- UI.pauseMenuButtons is populated by UI.drawPauseMenu
@@ -178,18 +178,17 @@ function love.mousepressed(x, y, button)
                             print("Credits clicked - Placeholder") -- Placeholder
                         elseif btn.label == "Quit" then
                             love.event.quit()
-                        end
+                        end -- closes: if btn.label == "..."
                         return -- Click handled by pause menu
-                    end
-                end
-            end
+                    end -- closes: if x >= btn.x ...
+                end -- closes: for _, btn ...
+            end -- closes: if UI.pauseMenuButtons
             return -- Click was on the overlay but not on a button, consume it
-        end
+        end -- closes: if UI.state.showPauseMenu then
 
         -- If not paused, check other UI elements (e.g., Upgrade Tree)
         if UI.state.showUpgradeTree then
             -- First, check for clicks on tree view switch buttons
-            -- These buttons are drawn by UI.drawUpgradeTree and their regions stored in UI.upgradeTreeViewSwitchButtons
             if UI.upgradeTreeViewSwitchButtons then
                 for _, switchBtn in ipairs(UI.upgradeTreeViewSwitchButtons) do
                     if x >= switchBtn.x and x <= switchBtn.x + switchBtn.w and y >= switchBtn.y and y <= switchBtn.y + switchBtn.h then
@@ -198,81 +197,80 @@ function love.mousepressed(x, y, button)
                         elseif string.sub(switchBtn.id, 1, 5) == "Spell" then
                             UI.state.currentUpgradeTreeView = "spell"
                             UI.state.currentSpellSlotView = tonumber(string.sub(switchBtn.id, 7))
-                        end
-                        -- print("Switched upgrade tree view to: " .. UI.state.currentUpgradeTreeView .. (UI.state.currentUpgradeTreeView == "spell" and " slot " .. UI.state.currentSpellSlotView or ""))
+                        end -- closes: if switchBtn.id == "Player Tree" ...
                         return -- Click handled by switch button
-                    end
-                end
-            end
+                    end -- closes: if x >= switchBtn.x ... (for switchBtn)
+                end -- closes: for _, switchBtn ...
+            end -- closes: if UI.upgradeTreeViewSwitchButtons
 
             -- If no switch button clicked, then check for node clicks
             local nodesToSearch
-            local currentEffectParams
-            local upgradesSource
-            local treeIdForUpgrade
+            -- local currentEffectParams -- Not used here for click logic directly
+            -- local upgradesSource -- Not used here for click logic directly
+            -- local treeIdForUpgrade -- Not used here for click logic directly
             local isPlayerTree = (UI.state.currentUpgradeTreeView == "player")
 
             if isPlayerTree then
                 nodesToSearch = Upgrades.getNodes()
-                -- currentEffectParams = Upgrades.effectParams -- Not needed for upgrade call directly
-                -- upgradesSource = Upgrades.nodes -- Not needed for upgrade call directly
             else -- Spell tree
                 local spellInstance = Player.data.spells[UI.state.currentSpellSlotView]
                 if spellInstance and spellInstance.id and Upgrades.spellTreeDefinitions and Upgrades.spellTreeDefinitions[spellInstance.id] then
                     local treeDef = Upgrades.spellTreeDefinitions[spellInstance.id]
                     nodesToSearch = treeDef.nodes
-                    -- currentEffectParams = Upgrades.spellEffectParams
-                    -- upgradesSource = spellInstance.upgrades
                 else
                     nodesToSearch = {} -- No nodes to search if spell/tree not found
-                end
-            end
+                end -- closes: if spellInstance and ... (for spell tree node search assignment)
+            end -- closes: if isPlayerTree then ... else ...
 
             if not nodesToSearch or #nodesToSearch == 0 then
                 -- If no nodes (e.g. empty spell slot), allow dragging
                 isDraggingTree = true
                 lastMouseX, lastMouseY = x, y
                 return
-            end
+            end -- closes: if not nodesToSearch or #nodesToSearch == 0
 
-            local treeZoom = UI.treeZoom or 1.0 -- Ensure fallback if not set
-        local treeOffsetX = UI.treeOffset and UI.treeOffset.x or 0
-        local treeOffsetY = UI.treeOffset and UI.treeOffset.y or 0
+            local treeZoom = UI.treeZoom or 1.0
+            local treeOffsetX = UI.treeOffset and UI.treeOffset.x or 0
+            local treeOffsetY = UI.treeOffset and UI.treeOffset.y or 0
 
-        local screenWidth = love.graphics.getWidth()
-        local screenHeight = love.graphics.getHeight()
+            local screenWidth = love.graphics.getWidth()
+            local screenHeight = love.graphics.getHeight()
 
-        -- Apply inverse transformation to mouse coordinates
-        love.graphics.push()
-        love.graphics.translate(screenWidth / 2, screenHeight / 2)
-        love.graphics.scale(treeZoom, treeZoom)
-        love.graphics.translate(-screenWidth / 2 + treeOffsetX, -screenHeight / 2 + treeOffsetY)
-        local worldX, worldY = love.graphics.inverseTransformPoint(x, y)
-        love.graphics.pop()
+            love.graphics.push()
+            love.graphics.translate(screenWidth / 2, screenHeight / 2)
+            love.graphics.scale(treeZoom, treeZoom)
+            love.graphics.translate(-screenWidth / 2 + treeOffsetX, -screenHeight / 2 + treeOffsetY)
+            local worldX, worldY = love.graphics.inverseTransformPoint(x, y)
+            love.graphics.pop()
 
-        local nodeRadius = 15 -- Base model radius in world coordinates
+            local nodeRadius = 15
+            local clickedOnNode = false
+            for _, node_obj in ipairs(nodesToSearch) do
+                if utils.distance(worldX, worldY, node_obj.x, node_obj.y) <= nodeRadius then
+                    if isPlayerTree then
+                        Upgrades.upgradeNode(node_obj.id, Player)
+                    else
+                        local spellInstance = Player.data.spells[UI.state.currentSpellSlotView]
+                        -- Ensure spellInstance and treeDef are valid before upgrading
+                        if spellInstance and spellInstance.id and Upgrades.spellTreeDefinitions and Upgrades.spellTreeDefinitions[spellInstance.id] then
+                            local treeDef = Upgrades.spellTreeDefinitions[spellInstance.id]
+                            Upgrades.upgradeSpellNode(spellInstance, node_obj.id, treeDef, Player.data)
+                        else
+                            print("Error: Attempted to upgrade node for invalid spell/slot: " .. UI.state.currentSpellSlotView)
+                        end -- closes: if spellInstance and ... (for upgrade call)
+                    end -- closes: if isPlayerTree then ... else ... (for upgrade call)
+                    clickedOnNode = true
+                    break
+                end -- closes: if utils.distance ...
+            end -- closes: for _, node_obj ... (node click check)
 
-        local clickedOnNode = false
-        for _, node_obj in ipairs(nodesToSearch) do -- Iterate through the determined nodesToSearch
-            if utils.distance(worldX, worldY, node_obj.x, node_obj.y) <= nodeRadius then
-                if isPlayerTree then
-                    Upgrades.upgradeNode(node_obj.id, Player) -- Player tree uses node_obj.id
-                else
-                    local spellInstance = Player.data.spells[UI.state.currentSpellSlotView]
-                    local treeDef = Upgrades.spellTreeDefinitions[spellInstance.id]
-                    Upgrades.upgradeSpellNode(spellInstance, node_obj.id, treeDef, Player.data)
-                end
-                clickedOnNode = true
-                break
-            end
-        end
-
-        if not clickedOnNode then
-            isDraggingTree = true
-            lastMouseX, lastMouseY = x, y -- Store initial position for dragging
-        end -- This end closes 'if UI.state.showUpgradeTree then'
-    end -- This end closes 'if button == 1 then'
-end -- This end closes 'function love.mousepressed'
+            if not clickedOnNode then
+                isDraggingTree = true
+                lastMouseX, lastMouseY = x, y
+            end -- closes: if not clickedOnNode
+        end -- closes: if UI.state.showUpgradeTree then
+    end -- closes: if button == 1 then
+end -- closes: function love.mousepressed
 
 function love.mousereleased(x, y, button)
     if button == 1 then
