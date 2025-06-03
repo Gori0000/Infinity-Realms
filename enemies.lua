@@ -5,6 +5,9 @@ Enemies.boss = nil
 Enemies.bossSpawned = false
 Enemies.spawnTimer = 0
 
+-- These should match the keys in Assets.enemies table
+local availableEnemySpriteKeys = {"slime", "skeleton", "bird", "zombie", "treant"}
+
 function Enemies.initialize()
     Enemies.list = {}
     Enemies.boss = nil
@@ -12,49 +15,55 @@ function Enemies.initialize()
     Enemies.spawnTimer = 0
 end
 
--- Takes realmNumber directly
 function Enemies.spawnRegularEnemy(realmNumber)
     local mult = 1 + (realmNumber - 1) * 0.25
-    local x, y = math.random(800), math.random(600) -- Assuming window size from config eventually
+    local x = math.random(config.windowWidth or 800) -- Use config if available, else default
+    local y = math.random(config.windowHeight or 600)
+
+    local enemySpriteKey = availableEnemySpriteKeys[math.random(#availableEnemySpriteKeys)]
+
     table.insert(Enemies.list, {
-        x = x, y = y, radius = 12, speed = 60, 
-        hp = 30 * mult, exp = 10 * mult, type = "regular"
+        x = x, y = y,
+        radius = 12, -- Default radius, could be adjusted per enemyTypeKey later
+        speed = 60,
+        hp = 30 * mult,
+        exp = 10 * mult,
+        spriteKey = enemySpriteKey, -- Store the key for the sprite
+        -- type = "regular" -- This field is somewhat redundant if using spriteKey to differentiate
     })
 end
 
 function Enemies.spawnBoss()
     Enemies.boss = {
-        x = 400, y = 50, radius = 40, speed = 40, 
-        hp = 1000, exp = 500, type = "boss" -- exp is already here
+        x = 400, y = 50, radius = 40, speed = 40,
+        hp = 1000, exp = 500,
+        spriteKey = nil -- Or a specific boss sprite key if one exists in Assets.enemies
+        -- type = "boss"
     }
     Enemies.bossSpawned = true
 end
 
--- Updated signature to use provider functions
 function Enemies.update(dt, playerData, realmProviderFunc, killsProviderFunc)
     Enemies.spawnTimer = Enemies.spawnTimer - dt
     if Enemies.spawnTimer <= 0 and not Enemies.bossSpawned then
-        local currentRealm = realmProviderFunc() -- Get current realm via provider
+        local currentRealm = realmProviderFunc()
         Enemies.spawnRegularEnemy(currentRealm)
-        Enemies.spawnTimer = 1 
+        Enemies.spawnTimer = 1
     end
 
-    -- Use killsProviderFunc for boss spawn condition
     if killsProviderFunc() >= 100 and not Enemies.bossSpawned and not Enemies.boss then
         Enemies.spawnBoss()
     end
 
-    -- Update positions of regular enemies
     for i = #Enemies.list, 1, -1 do
         local e = Enemies.list[i]
-        if e then 
+        if e then
             local angle = math.atan2(playerData.y - e.y, playerData.x - e.x)
             e.x = e.x + math.cos(angle) * e.speed * dt
             e.y = e.y + math.sin(angle) * e.speed * dt
         end
     end
 
-    -- Update boss position
     if Enemies.boss then
         local angle = math.atan2(playerData.y - Enemies.boss.y, playerData.x - Enemies.boss.x)
         Enemies.boss.x = Enemies.boss.x + math.cos(angle) * Enemies.boss.speed * dt
@@ -63,21 +72,44 @@ function Enemies.update(dt, playerData, realmProviderFunc, killsProviderFunc)
 end
 
 function Enemies.draw()
-    love.graphics.setColor(1, 0, 0) 
-    for _, e in ipairs(Enemies.list) do
-        love.graphics.circle("fill", e.x, e.y, e.radius)
+    love.graphics.setColor(1, 1, 1) -- Default to white for sprites
+
+    for _, enemy in ipairs(Enemies.list) do
+        if Assets and Assets.enemies and Assets.enemies[enemy.spriteKey] then
+            local enemyImage = Assets.enemies[enemy.spriteKey]
+            local width = enemyImage:getWidth()
+            local height = enemyImage:getHeight()
+            love.graphics.draw(enemyImage, enemy.x, enemy.y, 0, 1, 1, width / 2, height / 2)
+        else
+            -- Fallback drawing if sprite is missing
+            print("Warning: Missing sprite for enemy type: " .. (enemy.spriteKey or "unknown") .. ". Drawing circle.")
+            love.graphics.setColor(1, 0, 0) -- Red for fallback
+            love.graphics.circle("fill", enemy.x, enemy.y, enemy.radius or 12)
+            love.graphics.setColor(1, 1, 1) -- Reset to white
+        end
     end
 
     if Enemies.boss then
-        love.graphics.setColor(0.5, 0, 0) 
-        love.graphics.circle("fill", Enemies.boss.x, Enemies.boss.y, Enemies.boss.radius)
+        -- Boss drawing - currently no specific sprite, uses a colored circle
+        -- If a boss sprite were added to Assets.enemies (e.g., Assets.enemies.bossMonster),
+        -- similar logic to above would be used.
+        if Enemies.boss.spriteKey and Assets and Assets.enemies and Assets.enemies[Enemies.boss.spriteKey] then
+            local bossImage = Assets.enemies[Enemies.boss.spriteKey]
+            local width = bossImage:getWidth()
+            local height = bossImage:getHeight()
+            love.graphics.draw(bossImage, Enemies.boss.x, Enemies.boss.y, 0, 1, 1, width/2, height/2)
+        else
+            love.graphics.setColor(0.5, 0, 0)
+            love.graphics.circle("fill", Enemies.boss.x, Enemies.boss.y, Enemies.boss.radius)
+        end
+        love.graphics.setColor(1, 1, 1) -- Reset to white
     end
 end
 
 function Enemies.reset()
     Enemies.list = {}
     Enemies.boss = nil
-    Enemies.bossSpawned = false 
+    Enemies.bossSpawned = false
     Enemies.spawnTimer = 0
 end
 
@@ -89,7 +121,6 @@ function Enemies.getBoss()
     return Enemies.boss
 end
 
--- Updated signature to use callbacks
 function Enemies.damageEnemy(enemy, damageAmount, index, addExpCallback, incrementKillsCallback, dropLootCallback)
     if not enemy then return false end
     enemy.hp = enemy.hp - damageAmount
@@ -97,14 +128,13 @@ function Enemies.damageEnemy(enemy, damageAmount, index, addExpCallback, increme
         if addExpCallback then addExpCallback(enemy.exp or 0) end
         if incrementKillsCallback then incrementKillsCallback() end
         if dropLootCallback then dropLootCallback(enemy.x, enemy.y) end
-        
+
         table.remove(Enemies.list, index)
-        return true -- Died
+        return true
     end
-    return false -- Survived
+    return false
 end
 
--- Updated signature to use callbacks
 function Enemies.damageBoss(damageAmount, addExpCallback, incrementKillsCallback, dropLootCallback)
     if not Enemies.boss then return false end
 
@@ -113,12 +143,11 @@ function Enemies.damageBoss(damageAmount, addExpCallback, incrementKillsCallback
         if addExpCallback then addExpCallback(Enemies.boss.exp or 0) end
         if incrementKillsCallback then incrementKillsCallback() end
         if dropLootCallback then dropLootCallback(Enemies.boss.x, Enemies.boss.y) end
-        
+
         Enemies.boss = nil
-        -- Enemies.bossSpawned = false -- Consider if another boss can spawn or if this flag should persist
-        return true -- Died
+        return true
     end
-    return false -- Survived
+    return false
 end
 
 return Enemies

@@ -2,6 +2,7 @@ function love.load()
     -- Load core modules first
     config = require("config")
     utils = require("utils")
+    Assets = require("assets") -- Load assets early
 
     love.window.setTitle(config.windowTitle)
     love.window.setMode(config.windowWidth, config.windowHeight)
@@ -17,7 +18,7 @@ function love.load()
 
     -- Initialize modules that require it
     Enemies.initialize()
-    Upgrades.initializeTree() 
+    Upgrades.initializeTree()
     Game.initializeRealms()
     -- Player.initialize() if exists
     -- UI.initialize() if exists
@@ -30,7 +31,7 @@ function love.update(dt)
     -- Provider functions for Enemies.update
     local realmProvider = function() return Game.getPlayerRealm() end
     local killsProvider = function() return Player.data.kills end
-    
+
     -- Enemies.update now uses callbacks passed from Game.update for damage/loot
     Enemies.update(dt, Player.data, realmProvider, killsProvider)
 
@@ -54,52 +55,52 @@ function love.keypressed(key)
     if key == "m" then
         UI.toggleUpgradeTree()
     end
-    
+
     if key == "tab" then
         UI.toggleInventory()
     end
-    
+
     if key == "r" then
         UI.toggleRealmList()
     end
-    
+
     if key == "t" then
         Game.changeRealm(-1, Player, Enemies) -- Pass Player and Enemies
     end
-    
+
     if key == "y" then
         Game.changeRealm(1, Player, Enemies) -- Pass Player and Enemies
     end
-    
+
     -- Changed elseif to if for the 'c' key to make it an independent condition
-    if key == "c" then 
+    if key == "c" then
         Player.craftTier2Essence()
     end
-    
+
     if key == "left" then
         UI.moveUpgradeTreeCamera(20, 0)
     end
-    
+
     if key == "right" then
         UI.moveUpgradeTreeCamera(-20, 0)
     end
-    
+
     if key == "up" then
         UI.moveUpgradeTreeCamera(0, 20)
     end
-    
+
     if key == "down" then
         UI.moveUpgradeTreeCamera(0, -20)
     end
 end
 
 function love.mousepressed(x, y, button)
-    if button == 1 and UI.state.showUpgradeTree then 
+    if button == 1 and UI.state.showUpgradeTree then
         local currentNodes = Upgrades.getNodes()
-        for idx, node in ipairs(currentNodes) do 
+        for idx, node in ipairs(currentNodes) do
             if utils.distance(x, y, node.x + UI.treeOffset.x, node.y + UI.treeOffset.y) <= 15 then
                 Upgrades.upgradeNode(idx, Player) -- Pass Player module
-                break 
+                break
             end
         end
     end
