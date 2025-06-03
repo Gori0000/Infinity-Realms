@@ -102,10 +102,14 @@ function Game.triggerSpellEffect(playerOriginData, spellData, targetX, targetY)
 end
 
 function Game.handleChainEffect(firstHitEnemy, originalSpellData, playerData, config_arg, utils)
-    local maxChains = 4 -- Hardcoded from "chain=4"
-    local chainSearchRadius = 200 -- pixels
+    local chainParams = originalSpellData.effectsToApply and originalSpellData.effectsToApply.chain or {}
+    local maxChains = chainParams.count or 0
+    local chainSearchRadius = chainParams.searchRadius or 200 -- Default if not specified
+    local chainDamageMultiplier = chainParams.damageMultiplier or 1.0 -- Default if not specified
+    local chainDamage = originalSpellData.damage * chainDamageMultiplier -- Use originalSpellData.damage which is calculatedDamage
+
     local currentChainTarget = firstHitEnemy
-    local alreadyChainedTo = { [currentChainTarget] = true } -- Use table reference as key
+    local alreadyChainedTo = { [currentChainTarget] = true }
     local chainCount = 0
 
     -- print("Starting chain effect from enemy at: " .. currentChainTarget.x .. "," .. currentChainTarget.y)
@@ -149,10 +153,9 @@ function Game.handleChainEffect(firstHitEnemy, originalSpellData, playerData, co
                 color = {0.5, 0.5, 1, 0.8} -- Light blue
             })
 
-            -- Apply damage (using full original spell damage for now)
-            local damageToApply = originalSpellData.calculatedDamage
+            -- Apply damage
             if nearestNextTarget == currentBoss then -- Check if the nearest target is the boss
-                 Enemies.damageBoss(nearestNextTarget, damageToApply,
+                 Enemies.damageBoss(nearestNextTarget, chainDamage,
                     function(exp) playerData.exp = playerData.exp + exp end,
                     function() playerData.kills = playerData.kills + 1 end,
                     function(lx, ly) Game.dropLoot(lx, ly, playerData) end)
@@ -166,7 +169,7 @@ function Game.handleChainEffect(firstHitEnemy, originalSpellData, playerData, co
                     end
                 end
                 if enemyIndex then
-                    Enemies.damageEnemy(nearestNextTarget, damageToApply, enemyIndex,
+                    Enemies.damageEnemy(nearestNextTarget, chainDamage, enemyIndex,
                         function(exp) playerData.exp = playerData.exp + exp end,
                         function() playerData.kills = playerData.kills + 1 end,
                         function(lx, ly) Game.dropLoot(lx, ly, playerData) end)
@@ -324,13 +327,16 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
                         function(lx, ly) Game.dropLoot(lx, ly, Player.data) end)
 
                     -- Apply status effects if any
-                    if spell.spellId == "Fireball" then
-                        Enemies.applyStatusEffect(e, "burn", 3, 5) -- Duration 3s, 5 DPS
-                    elseif spell.spellId == "IceLance" then
-                        Enemies.applyStatusEffect(e, "slow", 2, 0.4) -- Duration 2s, 40% slow
+                    if spell.effectsToApply and spell.effectsToApply.burn and spell.spellId == "Fireball" then
+                        local burnEffect = spell.effectsToApply.burn
+                        local burnDPS = spell.damage * burnEffect.dpsRatio -- spell.damage is calculatedDamage
+                        Enemies.applyStatusEffect(e, "burn", burnEffect.duration, burnDPS)
+                    elseif spell.effectsToApply and spell.effectsToApply.slow and spell.spellId == "IceLance" then
+                        local slowEffect = spell.effectsToApply.slow
+                        Enemies.applyStatusEffect(e, "slow", slowEffect.duration, slowEffect.magnitude)
                     end
 
-                    if spell.spellId == "ChainBolt" then
+                    if spell.effectsToApply and spell.effectsToApply.chain and spell.spellId == "ChainBolt" then
                         Game.handleChainEffect(e, spell, Player.data, config_arg, utils)
                         table.remove(Game.activeSpells, i) -- ChainBolt projectile is consumed
                         goto next_spell_update
@@ -353,13 +359,16 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
                     function(lx, ly) Game.dropLoot(lx, ly, Player.data) end)
 
                 -- Apply status effects if any to boss
-                if spell.spellId == "Fireball" then
-                    Enemies.applyStatusEffect(currentBoss, "burn", 3, 5) -- Duration 3s, 5 DPS
-                elseif spell.spellId == "IceLance" then
-                    Enemies.applyStatusEffect(currentBoss, "slow", 2, 0.4) -- Duration 2s, 40% slow
+                if spell.effectsToApply and spell.effectsToApply.burn and spell.spellId == "Fireball" then
+                    local burnEffect = spell.effectsToApply.burn
+                    local burnDPS = spell.damage * burnEffect.dpsRatio
+                    Enemies.applyStatusEffect(currentBoss, "burn", burnEffect.duration, burnDPS)
+                elseif spell.effectsToApply and spell.effectsToApply.slow and spell.spellId == "IceLance" then
+                    local slowEffect = spell.effectsToApply.slow
+                    Enemies.applyStatusEffect(currentBoss, "slow", slowEffect.duration, slowEffect.magnitude)
                 end
 
-                if spell.spellId == "ChainBolt" then
+                if spell.effectsToApply and spell.effectsToApply.chain and spell.spellId == "ChainBolt" then
                     Game.handleChainEffect(currentBoss, spell, Player.data, config_arg, utils)
                     table.remove(Game.activeSpells, i) -- ChainBolt projectile is consumed
                     goto next_spell_update
@@ -383,17 +392,17 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
                             function() Player.data.kills = Player.data.kills + 1 end,
                             function(lx, ly) Game.dropLoot(lx, ly, Player.data) end)
 
-                        if spell.spellId == "ArcaneWave" then
+                        if spell.effectsToApply and spell.effectsToApply.knockback and spell.spellId == "ArcaneWave" then
+                            local knockbackEffect = spell.effectsToApply.knockback
+                            local knockbackStrength = knockbackEffect.strength or 50 -- Default if not set
                             local dirX = e.x - spell.x
                             local dirY = e.y - spell.y
                             local dist = (dirX^2 + dirY^2)^0.5
                             if dist > 0 then
                                 local normX = dirX / dist
                                 local normY = dirY / dist
-                                local knockbackStrength = 50 -- pixels
                                 e.x = e.x + normX * knockbackStrength
                                 e.y = e.y + normY * knockbackStrength
-                                -- Clamp to screen
                                 e.x = math.max(e.radius, math.min(config_arg.windowWidth - e.radius, e.x))
                                 e.y = math.max(e.radius, math.min(config_arg.windowHeight - e.radius, e.y))
                             end
@@ -407,17 +416,17 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
                         function() Player.data.kills = Player.data.kills + 1 end,
                         function(lx, ly) Game.dropLoot(lx, ly, Player.data) end)
 
-                    if spell.spellId == "ArcaneWave" then
+                    if spell.effectsToApply and spell.effectsToApply.knockback and spell.spellId == "ArcaneWave" then
+                        local knockbackEffect = spell.effectsToApply.knockback
+                        local knockbackStrength = knockbackEffect.strength or 50
                         local dirX = currentBoss.x - spell.x
                         local dirY = currentBoss.y - spell.y
                         local dist = (dirX^2 + dirY^2)^0.5
                         if dist > 0 then
                             local normX = dirX / dist
                             local normY = dirY / dist
-                            local knockbackStrength = 50 -- pixels
                             currentBoss.x = currentBoss.x + normX * knockbackStrength
                             currentBoss.y = currentBoss.y + normY * knockbackStrength
-                            -- Clamp to screen
                             currentBoss.x = math.max(currentBoss.radius, math.min(config_arg.windowWidth - currentBoss.radius, currentBoss.x))
                             currentBoss.y = math.max(currentBoss.radius, math.min(config_arg.windowHeight - currentBoss.radius, currentBoss.y))
                         end
@@ -444,31 +453,21 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
                     local enemiesToCheck = Enemies.getList()
                     for _, e in ipairs(enemiesToCheck) do
                         if not spell.hitEnemiesThisCast[e] and utils.distance(checkX, checkY, e.x, e.y) < (spell.width / 2 + e.radius) then
-                            spell.hitEnemiesThisCast[e] = true
-                            local dotDuration = 5 -- Default from "dot=5"
-                            for _, effectStr in ipairs(spell.effectsToApply) do
-                                local num = string.match(effectStr, "dot=(%d+)")
-                                if num then
-                                    dotDuration = tonumber(num)
-                                    break
-                                end
+                            if spell.effectsToApply and spell.effectsToApply.dot then
+                                spell.hitEnemiesThisCast[e] = true
+                                local dotEffect = spell.effectsToApply.dot
+                                Enemies.applyStatusEffect(e, "dot", dotEffect.duration, spell.damage) -- spell.damage is DPS
                             end
-                            Enemies.applyStatusEffect(e, "dot", dotDuration, spell.damage)
                         end
                     end
 
                     local boss = Enemies.getBoss()
                     if boss and not spell.hitEnemiesThisCast[boss] and utils.distance(checkX, checkY, boss.x, boss.y) < (spell.width / 2 + boss.radius) then
-                        spell.hitEnemiesThisCast[boss] = true
-                        local dotDuration = 5 -- Default from "dot=5"
-                        for _, effectStr in ipairs(spell.effectsToApply) do
-                            local num = string.match(effectStr, "dot=(%d+)")
-                            if num then
-                                dotDuration = tonumber(num)
-                                break
-                            end
+                        if spell.effectsToApply and spell.effectsToApply.dot then
+                            spell.hitEnemiesThisCast[boss] = true
+                            local dotEffect = spell.effectsToApply.dot
+                            Enemies.applyStatusEffect(boss, "dot", dotEffect.duration, spell.damage) -- spell.damage is DPS
                         end
-                        Enemies.applyStatusEffect(boss, "dot", dotDuration, spell.damage)
                     end
                 end
             end

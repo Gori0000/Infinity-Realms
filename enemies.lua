@@ -8,6 +8,13 @@ Enemies.spawnTimer = 0
 -- These should match the keys in Assets.enemies table
 local availableEnemySpriteKeys = {"slime", "skeleton", "bird", "zombie", "treant"}
 
+-- Internal function to handle common death processing
+local function _handleEnemyDeathProcess(enemy, addExpCb, incrementKillsCb, dropLootCb)
+    if addExpCb then addExpCb(enemy.exp or 0) end
+    if incrementKillsCb then incrementKillsCb() end
+    if dropLootCb then dropLootCb(enemy.x, enemy.y) end
+end
+
 function Enemies.initialize()
     Enemies.list = {}
     Enemies.boss = nil
@@ -64,7 +71,7 @@ function Enemies.applyStatusEffect(enemyRef, effectName, duration, magnitude, re
     }
 end
 
-function Enemies.update(dt, playerData, realmProviderFunc, killsProviderFunc)
+function Enemies.update(dt, playerData, realmProviderFunc, killsProviderFunc, playerRefForCallbacks, gameRefForCallbacks)
     Enemies.spawnTimer = Enemies.spawnTimer - dt
     if Enemies.spawnTimer <= 0 and not Enemies.bossSpawned then
         local currentRealm = realmProviderFunc()
@@ -118,6 +125,14 @@ function Enemies.update(dt, playerData, realmProviderFunc, killsProviderFunc)
         end
 
         if e.hp <= 0 then -- Check for death after all damage sources for the frame
+            if playerRefForCallbacks and gameRefForCallbacks then
+                local addExperienceCb = function(exp) playerRefForCallbacks.exp = playerRefForCallbacks.exp + exp end
+                local incrementPlayerKillsCb = function() playerRefForCallbacks.kills = playerRefForCallbacks.kills + 1 end
+                local dropLootAtPositionCb = function(lx, ly) gameRefForCallbacks.dropLoot(lx, ly, playerRefForCallbacks) end
+                _handleEnemyDeathProcess(e, addExperienceCb, incrementPlayerKillsCb, dropLootAtPositionCb)
+            else
+                print("Warning: Callbacks not available for DoT death processing for enemy.")
+            end
             table.insert(enemiesToRemoveIndices, i)
             goto next_enemy_loop -- Skip movement if dead
         end
@@ -173,8 +188,15 @@ function Enemies.update(dt, playerData, realmProviderFunc, killsProviderFunc)
         end
 
         if boss.hp <= 0 then
+            if playerRefForCallbacks and gameRefForCallbacks then
+                local addExperienceCb = function(exp) playerRefForCallbacks.exp = playerRefForCallbacks.exp + exp end
+                local incrementPlayerKillsCb = function() playerRefForCallbacks.kills = playerRefForCallbacks.kills + 1 end
+                local dropLootAtPositionCb = function(lx, ly) gameRefForCallbacks.dropLoot(lx, ly, playerRefForCallbacks) end
+                _handleEnemyDeathProcess(boss, addExperienceCb, incrementPlayerKillsCb, dropLootAtPositionCb)
+            else
+                print("Warning: Callbacks not available for DoT death processing for boss.")
+            end
             Enemies.boss = nil -- Boss is defeated
-             -- No exp/loot from this path yet.
         end
 
         if Enemies.boss then -- Check if boss still exists after all damage
@@ -328,10 +350,7 @@ function Enemies.damageEnemy(enemy, damageAmount, index, addExpCallback, increme
     if not enemy then return false end
     enemy.hp = enemy.hp - damageAmount
     if enemy.hp <= 0 then
-        if addExpCallback then addExpCallback(enemy.exp or 0) end
-        if incrementKillsCallback then incrementKillsCallback() end
-        if dropLootCallback then dropLootCallback(enemy.x, enemy.y) end
-
+        _handleEnemyDeathProcess(enemy, addExpCallback, incrementKillsCallback, dropLootCallback)
         table.remove(Enemies.list, index)
         return true
     end
@@ -343,10 +362,7 @@ function Enemies.damageBoss(damageAmount, addExpCallback, incrementKillsCallback
 
     Enemies.boss.hp = Enemies.boss.hp - damageAmount
     if Enemies.boss.hp <= 0 then
-        if addExpCallback then addExpCallback(Enemies.boss.exp or 0) end
-        if incrementKillsCallback then incrementKillsCallback() end
-        if dropLootCallback then dropLootCallback(Enemies.boss.x, Enemies.boss.y) end
-
+        _handleEnemyDeathProcess(Enemies.boss, addExpCallback, incrementKillsCallback, dropLootCallback)
         Enemies.boss = nil
         return true
     end

@@ -1,4 +1,5 @@
 local Player = {}
+local utils = require("utils") -- Added for deepCopy
 
 Player.data = {
     x = 400, y = 300,
@@ -246,12 +247,9 @@ function Player.initializeSpells(spellsDataDefinitions)
         if spellId and spellsDataDefinitions and spellsDataDefinitions[spellId] then
             local baseSpellData = spellsDataDefinitions[spellId]
 
-            -- Shallow copy for effects table
             local newEffects = {}
             if baseSpellData.effects then
-                for _, eff_val in ipairs(baseSpellData.effects) do
-                    table.insert(newEffects, eff_val)
-                end
+                newEffects = utils.deepCopy(baseSpellData.effects) -- Use deepCopy for structured effects table
             end
 
             Player.data.spells[i] = {

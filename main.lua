@@ -62,7 +62,8 @@ function love.update(dt)
         local killsProvider = function() return Player.data.kills end
 
         -- Enemies.update now uses callbacks passed from Game.update for damage/loot
-        Enemies.update(dt, Player.data, realmProvider, killsProvider)
+        -- Also pass Player.data and Game module for status effect death callbacks
+        Enemies.update(dt, Player.data, realmProvider, killsProvider, Player.data, Game)
 
         -- Game.update handles bullets, collisions (which then calls Enemies.damage... with callbacks), loot, level up etc.
         Game.update(dt, Player, Enemies, Config, utils) -- Pass global Config
@@ -270,7 +271,7 @@ function love.mousepressed(x, y, button)
             isDraggingTree = true
             lastMouseX, lastMouseY = x, y -- Store initial position for dragging
         end
-    end
+    end -- Closes 'if button == 1 then'
 end
 
 function love.mousereleased(x, y, button)
