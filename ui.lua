@@ -3,10 +3,14 @@ local UI = {}
 UI.state = {
     showInventory = false,
     showUpgradeTree = true,
-    showRealmList = false
+    showRealmList = false,
+    showStatsMenu = false -- Add this line
 }
 
 UI.treeOffset = { x = 0, y = 0 } -- This offset itself is not scaled by uiScaleFactor, it's a camera pan.
+UI.treeZoom = 1.0
+UI.MIN_ZOOM = 0.5
+UI.MAX_ZOOM = 3.0
 
 function UI.toggleInventory()
     UI.state.showInventory = not UI.state.showInventory
@@ -42,8 +46,8 @@ function UI.drawHUD(playerData, currentRealm)
     yPos = yPos + lineStep
     love.graphics.print("Gold: " .. playerData.gold, xPos, yPos)
     yPos = yPos + lineStep
-    love.graphics.print("Essence T1: " .. playerData.essence.tier1 .. " T2: " .. playerData.essence.tier2, xPos, yPos)
-    yPos = yPos + lineStep
+    -- love.graphics.print("Essence T1: " .. playerData.essence.tier1 .. " T2: " .. playerData.essence.tier2, xPos, yPos) -- REMOVED
+    -- yPos = yPos + lineStep -- REMOVED (this was for essence line spacing)
     love.graphics.print("Realm: " .. currentRealm, xPos, yPos)
 end
 
@@ -97,9 +101,23 @@ end
 
 function UI.drawUpgradeTree(upgradeNodesTable, effectParams)
     if not UI.state.showUpgradeTree then return end
-    local uiScale = (Config and Config.uiScaleFactor) or 1
 
-    local nodeRadius = 15 * uiScale
+    love.graphics.push()
+    local centerX = love.graphics.getWidth() / 2
+    local centerY = love.graphics.getHeight() / 2
+
+    -- Translate so the zoom is centered around the screen's center, then apply offset
+    love.graphics.translate(centerX, centerY)
+    love.graphics.scale(UI.treeZoom, UI.treeZoom)
+    love.graphics.translate(-centerX + UI.treeOffset.x, -centerY + UI.treeOffset.y)
+
+    local uiScale = (Config and Config.uiScaleFactor) or 1
+    -- nodeRadius is now the base model radius; visual size comes from graphics transform
+    local nodeDrawRadius = 15
+    -- Text offsets and line widths will also be affected by the scale transform.
+    -- If fixed screen-space size is desired for some elements, they'd need to be divided by UI.treeZoom.
+    -- For now, let them scale.
+
     local defaultFillR, defaultFillG, defaultFillB = 0.7, 0.7, 0.7
     local offenseColorR, offenseColorG, offenseColorB = 1, 0.2, 0.2
     local defenseColorR, defenseColorG, defenseColorB = 0.2, 0.2, 1
@@ -107,8 +125,8 @@ function UI.drawUpgradeTree(upgradeNodesTable, effectParams)
     local maxedBorderR, maxedBorderG, maxedBorderB = 1, 0.84, 0
     local textColorR, textColorG, textColorB = 1, 1, 1
     local lineColorR, lineColorG, lineColorB = 0.5, 0.5, 0.5
-    local scaledLineWidth = math.max(1, 1 * uiScale) -- Ensure line width is at least 1
-    local scaledBorderWidth = math.max(1, 2 * uiScale)
+    local scaledLineWidth = math.max(1, (1 * uiScale) / UI.treeZoom ) -- Attempt to keep line width somewhat consistent
+    local scaledBorderWidth = math.max(1, (2 * uiScale) / UI.treeZoom ) -- Attempt to keep border width somewhat consistent
 
 
     for _, node in ipairs(upgradeNodesTable) do
@@ -119,28 +137,29 @@ function UI.drawUpgradeTree(upgradeNodesTable, effectParams)
         end
 
         love.graphics.setColor(r, g, b)
-        love.graphics.circle("fill", node.x + UI.treeOffset.x, node.y + UI.treeOffset.y, nodeRadius)
+        love.graphics.circle("fill", node.x, node.y, nodeDrawRadius) -- Use node.x, node.y directly (world coords)
 
         if node.maxed then
             love.graphics.setLineWidth(scaledBorderWidth)
             love.graphics.setColor(maxedBorderR, maxedBorderG, maxedBorderB)
-            love.graphics.circle("line", node.x + UI.treeOffset.x, node.y + UI.treeOffset.y, nodeRadius)
+            love.graphics.circle("line", node.x, node.y, nodeDrawRadius)
         end
 
-        love.graphics.setLineWidth(scaledLineWidth) -- Set for text and connection lines if needed, or reset to 1 for text.
-                                                 -- love.graphics.print doesn't use line width.
+        -- love.graphics.print doesn't use line width. Text will scale with the main transform.
         love.graphics.setColor(textColorR, textColorG, textColorB)
         local levelStr = node.level .. "/" .. node.maxLevel
         if node.maxed then
             levelStr = levelStr .. " (MAXED +3)"
         end
-        -- Scaled text offsets
+        -- Scaled text offsets - these are in world units relative to node.x, node.y
+        -- The uiScale here makes them consistent with other UI elements if zoom is 1.
+        -- They will naturally scale with UI.treeZoom.
         local textOffsetX = 10 * uiScale
         local textOffsetYLevel = 5 * uiScale
         local textOffsetYEffect = 20 * uiScale
         local textOffsetXEffect = 30 * uiScale
 
-        love.graphics.print(levelStr, node.x - textOffsetX + UI.treeOffset.x, node.y - textOffsetYLevel + UI.treeOffset.y)
+        love.graphics.print(levelStr, node.x - textOffsetX, node.y - textOffsetYLevel)
 
         local effectKey = node.effect
         local effectDisplayName = effectKey
@@ -148,7 +167,7 @@ function UI.drawUpgradeTree(upgradeNodesTable, effectParams)
             effectDisplayName = effectParams[effectKey].name
         end
         local categoryDisplayName = node.category or "N/A"
-        love.graphics.print(effectDisplayName .. " [" .. categoryDisplayName .. "]", node.x - textOffsetXEffect + UI.treeOffset.x, node.y + textOffsetYEffect + UI.treeOffset.y)
+        love.graphics.print(effectDisplayName .. " [" .. categoryDisplayName .. "]", node.x - textOffsetXEffect, node.y + textOffsetYEffect)
 
         love.graphics.setColor(lineColorR, lineColorG, lineColorB)
         love.graphics.setLineWidth(scaledLineWidth)
@@ -156,13 +175,106 @@ function UI.drawUpgradeTree(upgradeNodesTable, effectParams)
             for _, childNodeRef in ipairs(node.children) do
                 local childNode = childNodeRef
                 if childNode and childNode.x and childNode.y then
-                    love.graphics.line(node.x + UI.treeOffset.x, node.y + UI.treeOffset.y, childNode.x + UI.treeOffset.x, childNode.y + UI.treeOffset.y)
+                    love.graphics.line(node.x, node.y, childNode.x, childNode.y) -- Use world coords
                 end
             end
         end
     end
-    love.graphics.setLineWidth(1) -- Reset line width to default after drawing tree
-    love.graphics.setColor(1,1,1)
+
+    love.graphics.pop() -- Restore previous transform state
+    love.graphics.setLineWidth(1) -- Reset line width globally after finishing with tree
+    love.graphics.setColor(1,1,1) -- Reset color globally
+end
+
+function UI.toggleStatsMenu()
+    UI.state.showStatsMenu = not UI.state.showStatsMenu
+    -- Optional: make it mutually exclusive with other UIs if needed
+    -- if UI.state.showStatsMenu then
+    --     UI.state.showUpgradeTree = false
+    --     UI.state.showInventory = false
+    --     UI.state.showRealmList = false
+    -- end
+end
+
+function UI.drawStatsMenu(playerData)
+    if not UI.state.showStatsMenu then return end
+
+    local uiScale = (Config and Config.uiScaleFactor) or 1
+    local xPadding = 20 * uiScale
+    local yPadding = 20 * uiScale
+    local lineStep = (Config and Config.baseFontSize or 14) * 1.8 * uiScale -- Slightly larger line step for readability
+    local startX = 150 * uiScale
+    local startY = 100 * uiScale
+    local menuWidth = 400 * uiScale
+    local menuHeight = 450 * uiScale -- Adjusted for more content
+
+    -- Draw menu background
+    love.graphics.setColor(0.1, 0.1, 0.15, 0.9) -- Dark blueish background
+    love.graphics.rectangle("fill", startX, startY, menuWidth, menuHeight)
+    love.graphics.setColor(0.8, 0.8, 0.8, 1) -- Border color
+    love.graphics.setLineWidth(2 * uiScale)
+    love.graphics.rectangle("line", startX, startY, menuWidth, menuHeight)
+    love.graphics.setLineWidth(1) -- Reset line width
+
+    -- Title
+    love.graphics.setColor(1, 1, 1, 1)
+    local titleText = "Player Statistics"
+    -- Ensure font is available for getWidth, love.graphics.getFont() should be valid if set in love.load
+    local currentFont = love.graphics.getFont()
+    local titleWidth = currentFont:getWidth(titleText)
+    love.graphics.print(titleText, startX + (menuWidth - titleWidth) / 2, startY + yPadding)
+
+    -- Stats content
+    local currentY = startY + yPadding + lineStep * 1.5 -- Extra space after title
+    local textX = startX + xPadding
+
+    if not playerData then
+        love.graphics.print("Player data not available.", textX, currentY)
+        love.graphics.setColor(1,1,1) -- Reset color
+        return
+    end
+
+    love.graphics.print("Skill Points: " .. (playerData.skillPoints or 0), textX, currentY)
+    currentY = currentY + lineStep
+
+    love.graphics.print("Essence T1: " .. (playerData.essence and playerData.essence.tier1 or 0), textX, currentY)
+    currentY = currentY + lineStep
+    love.graphics.print("Essence T2: " .. (playerData.essence and playerData.essence.tier2 or 0), textX, currentY)
+    currentY = currentY + lineStep
+    currentY = currentY + lineStep -- Extra space
+
+    -- Basic stats
+    love.graphics.print("Level: " .. (playerData.level or 0), textX, currentY)
+    currentY = currentY + lineStep
+    love.graphics.print("Experience: " .. (playerData.exp or 0) .. "/" .. ((playerData.level or 0) * 100), textX, currentY)
+    currentY = currentY + lineStep
+    love.graphics.print("HP: " .. string.format("%.0f", playerData.hp or 0) .. "/" .. string.format("%.0f", playerData.maxHp or 0), textX, currentY)
+    currentY = currentY + lineStep
+    love.graphics.print("Movement Speed: " .. string.format("%.0f", playerData.speed or 0), textX, currentY)
+    currentY = currentY + lineStep
+    love.graphics.print("Kills: " .. (playerData.kills or 0), textX, currentY)
+    currentY = currentY + lineStep
+    love.graphics.print("Gold: " .. (playerData.gold or 0), textX, currentY)
+    currentY = currentY + lineStep
+
+    -- Calculated bonuses
+    currentY = currentY + lineStep -- Extra space before bonuses
+    love.graphics.print("Bonuses:", textX, currentY)
+    currentY = currentY + lineStep
+    if playerData.calculatedBonuses then
+        love.graphics.print(string.format("  Damage: +%.1f%%", playerData.calculatedBonuses.DMG or 0), textX, currentY)
+        currentY = currentY + lineStep
+        love.graphics.print(string.format("  Cooldown Reduction: +%.1f%%", playerData.calculatedBonuses.CDR or 0), textX, currentY)
+        currentY = currentY + lineStep
+        love.graphics.print(string.format("  Max HP Bonus: +%.0f", playerData.calculatedBonuses.HP_MAX or 0), textX, currentY)
+        currentY = currentY + lineStep
+        love.graphics.print(string.format("  Move Speed Bonus: +%.1f%%", playerData.calculatedBonuses.MOVE_SPEED or 0), textX, currentY)
+        currentY = currentY + lineStep
+    else
+        love.graphics.print("  No bonuses calculated.", textX, currentY)
+        currentY = currentY + lineStep
+    end
+    love.graphics.setColor(1,1,1) -- Reset color
 end
 
 return UI

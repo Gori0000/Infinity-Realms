@@ -130,6 +130,7 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
         Player.data.level = Player.data.level + 1
         Player.data.maxHp = Player.data.maxHp + 10
         Player.data.hp = Player.data.maxHp
+        Player.data.skillPoints = (Player.data.skillPoints or 0) + 2 -- Add this line
     end
 end
 
