@@ -17,7 +17,6 @@ end
 
 function Enemies.spawnRegularEnemy(realmNumber)
     local mult = 1 + (realmNumber - 1) * 0.25
-    -- Use global Config for window dimensions
     local x = math.random((Config and Config.windowWidth) or 800)
     local y = math.random((Config and Config.windowHeight) or 600)
 
@@ -71,22 +70,21 @@ function Enemies.update(dt, playerData, realmProviderFunc, killsProviderFunc)
 end
 
 function Enemies.draw()
-    love.graphics.setColor(1, 1, 1) -- Default to white for sprites
+    love.graphics.setColor(1, 1, 1)
 
+    local currentEnemyScale = (Config and Config.enemyScale) or 1
     if not Config then
-        print("Warning: Config not available in Enemies.draw(), cannot apply spriteScale.")
+        print("Warning: Config not available in Enemies.draw(), using default scale 1.")
     end
-    local currentSpriteScale = (Config and Config.spriteScale) or 1
-
 
     for _, enemy in ipairs(Enemies.list) do
         if Assets and Assets.enemies and Assets.enemies[enemy.spriteKey] then
             local enemyImage = Assets.enemies[enemy.spriteKey]
             local width = enemyImage:getWidth()
             local height = enemyImage:getHeight()
-            love.graphics.draw(enemyImage, enemy.x, enemy.y, 0, currentSpriteScale, currentSpriteScale, width / 2, height / 2)
+            love.graphics.draw(enemyImage, enemy.x, enemy.y, 0, currentEnemyScale, currentEnemyScale, width / 2, height / 2)
         else
-            if Assets and Assets.enemies then -- Only print if Assets.enemies itself exists
+            if Assets and Assets.enemies then
                 print("Warning: Missing sprite for enemy type: " .. (enemy.spriteKey or "unknown") .. ". Drawing circle.")
             end
             love.graphics.setColor(1, 0, 0)
@@ -96,11 +94,13 @@ function Enemies.draw()
     end
 
     if Enemies.boss then
+        -- Assuming boss might use defaultSpriteScale or its own specific scale if defined
+        local bossScale = (Config and Config.defaultSpriteScale) or 1
         if Enemies.boss.spriteKey and Assets and Assets.enemies and Assets.enemies[Enemies.boss.spriteKey] then
             local bossImage = Assets.enemies[Enemies.boss.spriteKey]
             local width = bossImage:getWidth()
             local height = bossImage:getHeight()
-            love.graphics.draw(bossImage, Enemies.boss.x, Enemies.boss.y, 0, currentSpriteScale, currentSpriteScale, width/2, height/2)
+            love.graphics.draw(bossImage, Enemies.boss.x, Enemies.boss.y, 0, bossScale, bossScale, width/2, height/2)
         else
             love.graphics.setColor(0.5, 0, 0)
             love.graphics.circle("fill", Enemies.boss.x, Enemies.boss.y, Enemies.boss.radius)

@@ -79,7 +79,6 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
         local b = Game.bullets[i]
         if b then
             b.x, b.y = b.x + b.dx * dt, b.y + b.dy * dt
-            -- Use config_arg for boundary checks as it's passed to update
             if b.x < 0 or b.x > config_arg.windowWidth or b.y < 0 or b.y > config_arg.windowHeight then
                 table.remove(Game.bullets, i)
             end
@@ -135,10 +134,12 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
 end
 
 function Game.draw()
-    local currentSpriteScale = (Config and Config.spriteScale) or 1
     if not Config then
-        print("Warning: Global Config not available in Game.draw(). Sprite scale may be incorrect.")
+        print("Warning: Global Config not available in Game.draw(). Sprite scales may be incorrect.")
     end
+    local projScale = (Config and Config.projectileScale) or 1
+    local coinS = (Config and Config.coinScale) or 1
+    local defaultS = (Config and Config.defaultSpriteScale) or 1
 
     -- Draw bullets
     if Assets and Assets.projectile_blue then
@@ -147,7 +148,7 @@ function Game.draw()
         local pHeight = projectileImage:getHeight()
         love.graphics.setColor(1, 1, 1)
         for _, b in ipairs(Game.bullets) do
-            love.graphics.draw(projectileImage, b.x, b.y, 0, currentSpriteScale, currentSpriteScale, pWidth / 2, pHeight / 2)
+            love.graphics.draw(projectileImage, b.x, b.y, 0, projScale, projScale, pWidth / 2, pHeight / 2)
         end
     else
         if Assets then
@@ -163,12 +164,20 @@ function Game.draw()
     -- Draw loot
     for _, l in ipairs(Game.loot) do
         local lootImage = Assets.loot and Assets.loot[l.type]
+        local currentLootScale = defaultS
+
+        if l.type == "coin" then
+            currentLootScale = coinS
+        end
+        -- Add other specific loot type scales here if needed e.g.
+        -- elseif l.type == "essence_t1" then currentLootScale = Config.essenceScale or defaultS end
+
 
         if lootImage then
             love.graphics.setColor(1, 1, 1)
             local lWidth = lootImage:getWidth()
             local lHeight = lootImage:getHeight()
-            love.graphics.draw(lootImage, l.x, l.y, 0, currentSpriteScale, currentSpriteScale, lWidth / 2, lHeight / 2)
+            love.graphics.draw(lootImage, l.x, l.y, 0, currentLootScale, currentLootScale, lWidth / 2, lHeight / 2)
         else
             if Assets and Assets.loot then
                  print("Info: No sprite for loot type: " .. (l.type or "unknown") .. ". Drawing fallback circle.")
