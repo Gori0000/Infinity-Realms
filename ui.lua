@@ -4,8 +4,11 @@ UI.state = {
     showInventory = false,
     showUpgradeTree = true,
     showRealmList = false,
-    showStatsMenu = false -- Add this line
+    showStatsMenu = false, -- Add this line
+    showPauseMenu = false
 }
+
+UI.pauseMenuButtons = {} -- To store button data for click detection
 
 UI.treeOffset = { x = 0, y = 0 } -- This offset itself is not scaled by uiScaleFactor, it's a camera pan.
 UI.treeZoom = 1.0
@@ -200,13 +203,13 @@ function UI.drawStatsMenu(playerData)
     if not UI.state.showStatsMenu then return end
 
     local uiScale = (Config and Config.uiScaleFactor) or 1
-    local xPadding = 20 * uiScale
-    local yPadding = 20 * uiScale
+    local xPadding = 15 * uiScale -- Was 20
+    local yPadding = 15 * uiScale -- Was 20
     local lineStep = (Config and Config.baseFontSize or 14) * 1.8 * uiScale -- Slightly larger line step for readability
     local startX = 150 * uiScale
     local startY = 100 * uiScale
-    local menuWidth = 400 * uiScale
-    local menuHeight = 450 * uiScale -- Adjusted for more content
+    local menuWidth = 280 * uiScale -- Was 400
+    local menuHeight = 315 * uiScale -- Was 450
 
     -- Draw menu background
     love.graphics.setColor(0.1, 0.1, 0.15, 0.9) -- Dark blueish background
@@ -273,6 +276,67 @@ function UI.drawStatsMenu(playerData)
     else
         love.graphics.print("  No bonuses calculated.", textX, currentY)
         currentY = currentY + lineStep
+    end
+    love.graphics.setColor(1,1,1) -- Reset color
+end
+
+function UI.togglePauseMenu()
+    UI.state.showPauseMenu = not UI.state.showPauseMenu
+    -- If opening pause menu, consider closing other major UI elements
+    if UI.state.showPauseMenu then
+        UI.state.showUpgradeTree = false
+        UI.state.showInventory = false
+        UI.state.showRealmList = false
+        UI.state.showStatsMenu = false
+    end
+end
+
+function UI.drawPauseMenu()
+    if not UI.state.showPauseMenu then return end
+
+    local uiScale = (Config and Config.uiScaleFactor) or 1
+    local screenW, screenH = love.graphics.getWidth(), love.graphics.getHeight()
+
+    -- Draw semi-transparent overlay
+    love.graphics.setColor(0, 0, 0, 0.7)
+    love.graphics.rectangle("fill", 0, 0, screenW, screenH)
+
+    -- Button properties
+    love.graphics.setColor(1, 1, 1) -- Text and button outline color
+    local buttonW = 200 * uiScale
+    local buttonH = 50 * uiScale
+    local spacing = 20 * uiScale
+    local numButtons = 4
+    local totalButtonHeight = (numButtons * buttonH) + ((numButtons - 1) * spacing)
+    local startY = (screenH - totalButtonHeight) / 2
+
+    UI.pauseMenuButtons = {} -- Clear and rebuild button data each time it's drawn
+
+    local options = {"Continue", "Settings", "Credits", "Quit"}
+    local currentFont = love.graphics.getFont() -- Get current font for text centering
+
+    for i, option in ipairs(options) do
+        local btnX = (screenW - buttonW) / 2
+        local btnY = startY + (i - 1) * (buttonH + spacing)
+
+        -- Draw button rectangle (outline)
+        love.graphics.setLineWidth(2 * uiScale)
+        love.graphics.rectangle("line", btnX, btnY, buttonW, buttonH)
+        love.graphics.setLineWidth(1) -- Reset line width
+
+        -- Draw button text (centered)
+        -- love.graphics.printf can center, but need to adjust y for vertical centering.
+        -- A common way for vertical centering with printf is to print at y + (buttonH - fontHeight)/2
+        -- For simplicity here, a slight offset from top of button.
+        local textWidth = currentFont:getWidth(option)
+        local textHeight = currentFont:getHeight() -- Approximate height
+        love.graphics.print(option, btnX + (buttonW - textWidth) / 2, btnY + (buttonH - textHeight) / 2)
+
+
+        table.insert(UI.pauseMenuButtons, {
+            label = option,
+            x = btnX, y = btnY, w = buttonW, h = buttonH
+        })
     end
     love.graphics.setColor(1,1,1) -- Reset color
 end

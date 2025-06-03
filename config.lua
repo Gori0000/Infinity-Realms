@@ -9,9 +9,9 @@ local config = {
 
     -- Individual sprite category scaling
     playerScale = 0.5,       -- Overall scale for the player sprite (wizard_spritesheet.png is 256x256, so 0.5 makes it 128x128)
-    enemyScale = 0.5 / 3,    -- Approx 0.166. (e.g. if slime is 32x32, this makes it ~5.3x5.3, which is very small. User might mean enemies should be 1/3 of player's *rendered* size, not 1/3 of the global 0.5 scale. This needs careful testing. For now, implementing as per formula)
-    projectileScale = 0.5 / 8, -- Approx 0.0625 (e.g. if projectile_blue is 32x32, this makes it 2x2 pixels. This seems extremely small)
-    coinScale = 0.5 / 8,       -- Approx 0.0625 (e.g. if coin is 16x16, this makes it 1x1 pixel. Also very small)
+    enemyScale = 0.25,       -- Original value was 0.5 / 3 (approx 0.166). Adjusted for better visibility.
+    projectileScale = 0.35,  -- Original value was 0.5 / 8 (0.0625). Adjusted for better visibility.
+    coinScale = 0.5,         -- Original value was 0.5 / 8 (0.0625). Adjusted for better visibility.
 
     defaultSpriteScale = 0.5, -- For other sprites like essences, or as a general fallback if a specific scale isn't defined.
                             -- Note: The original `spriteScale = 0.5` might have been intended as this default.

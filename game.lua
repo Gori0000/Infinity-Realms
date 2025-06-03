@@ -36,7 +36,7 @@ end
 
 function Game.dropLoot(x, y, playerData)
     if math.random() < 0.5 then
-        playerData.gold = playerData.gold + 1
+        -- playerData.gold = playerData.gold + 1 -- Gold is now awarded on pickup
         table.insert(Game.loot, {x=x,y=y, type="coin", radius=8})
     end
     if math.random() < 0.05 then
@@ -122,6 +122,19 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
                 table.remove(Game.bullets, i)
             end
             ::next_bullet_boss_collision::
+        end
+    end
+
+    -- Player-Loot collision (specifically for coins)
+    for i = #Game.loot, 1, -1 do
+        local l = Game.loot[i]
+        if l and l.type == "coin" then
+            -- Assuming Player.data.radius is defined and represents player's pickup radius
+            local playerRadius = (Player.data and Player.data.radius) or 10 -- Fallback radius
+            if utils.distance(Player.data.x, Player.data.y, l.x, l.y) < (playerRadius + l.radius) then
+                Player.data.gold = Player.data.gold + 1
+                table.remove(Game.loot, i)
+            end
         end
     end
 
