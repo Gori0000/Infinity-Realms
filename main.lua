@@ -1,12 +1,12 @@
 function love.load()
     -- Load core modules first
-    config = require("config")
+    Config = require("config") -- Made global with capital
     utils = require("utils")
     Assets = require("assets") -- Load assets early
 
-    love.window.setTitle(config.windowTitle)
-    love.window.setMode(config.windowWidth, config.windowHeight)
-    font = love.graphics.newFont(config.fontSize)
+    love.window.setTitle(Config.windowTitle)
+    love.window.setMode(Config.windowWidth, Config.windowHeight)
+    font = love.graphics.newFont(Config.fontSize)
     love.graphics.setFont(font)
 
     -- Load game logic modules
@@ -36,7 +36,7 @@ function love.update(dt)
     Enemies.update(dt, Player.data, realmProvider, killsProvider)
 
     -- Game.update handles bullets, collisions (which then calls Enemies.damage... with callbacks), loot, level up etc.
-    Game.update(dt, Player, Enemies, config, utils)
+    Game.update(dt, Player, Enemies, Config, utils) -- Pass global Config
 end
 
 function love.draw()

@@ -31,9 +31,13 @@ Upgrades.effectParams = {
 Upgrades.nodes = {}
 
 function Upgrades.categorizeNode(node)
-    if node.id % 3 == 1 then node.category = "Offense"
-    elseif node.id % 3 == 2 then node.category = "Defense"
-    else node.category = "Support" end
+    -- This function is primarily for nodes whose category isn't set by inheritance.
+    -- Or, it could be a fallback if a parent node somehow has no category.
+    if not node.category then -- Only categorize if not already set (e.g. by inheritance)
+        if node.id % 3 == 1 then node.category = "Offense"
+        elseif node.id % 3 == 2 then node.category = "Defense"
+        else node.category = "Support" end
+    end
 end
 
 function Upgrades.recalculatePlayerBonuses(Player, nodes)
@@ -77,46 +81,38 @@ end
 
 function Upgrades.initializeTree()
     Upgrades.nodes = {}
-    local root = {
-        id = 1,
-        x = 400, y = 300,
-        level = 0, maxLevel = 10,
-        effect = "DMG",
-        children = {}
+    local centerX = (Config and Config.windowWidth or 1920) / 2
+    local centerY = (Config and Config.windowHeight or 1080) / 2
+    local initialNodeYOffset = 200
+    local initialNodeXOffset = 250
+    local supportNodeYDisplacement = 200
+
+    local offenseNode = {
+        id = 1, x = centerX - initialNodeXOffset, y = centerY - initialNodeYOffset,
+        level = 0, maxLevel = 10, effect = "DMG", category = "Offense",
+        children = {}, maxed = false
     }
-    Upgrades.categorizeNode(root)
-    table.insert(Upgrades.nodes, root)
+    local defenseNode = {
+        id = 2, x = centerX + initialNodeXOffset, y = centerY - initialNodeYOffset,
+        level = 0, maxLevel = 10, effect = "HP_MAX", category = "Defense",
+        children = {}, maxed = false
+    }
+    local supportNode = {
+        id = 3, x = centerX, y = centerY - initialNodeYOffset + supportNodeYDisplacement,
+        level = 0, maxLevel = 10, effect = "CDR", category = "Support",
+        children = {}, maxed = false
+    }
+    table.insert(Upgrades.nodes, offenseNode)
+    table.insert(Upgrades.nodes, defenseNode)
+    table.insert(Upgrades.nodes, supportNode)
 end
 
-function Upgrades.expandTree(nodeToExpand)
-    local parentNode = nil
-    if type(nodeToExpand) == "number" then -- If an ID was passed
-        for _, n in ipairs(Upgrades.nodes) do
-            if n.id == nodeToExpand then
-                parentNode = n
-                break
-            end
-        end
-    else -- Assume it's the node object itself
-        parentNode = nodeToExpand
-    end
+function Upgrades.expandTree(nodeToExpand) -- nodeToExpand is the parent node object
+    if not nodeToExpand then print("Error: expandTree called with nil nodeToExpand."); return end
 
-    if not parentNode then
-        print("Error: Parent node for expansion not found with: ", nodeToExpand)
-        return
-    end
+    print("Attempting to expand node ID:", nodeToExpand.id, "Category:", nodeToExpand.category, "at (", nodeToExpand.x, ",", nodeToExpand.y, ")")
 
-    -- Only expand if the node doesn't already have children from this new logic
-    -- The old logic created 2 children. This new logic creates 1 if space.
-    -- We might need a flag on the node like `expandedWithNewLogic = true` or check child count.
-    -- For now, let's assume if #parentNode.children == 0, it can be expanded.
-    -- Or, more robustly, allow expansion only once when it's maxed.
-    -- The call to expandTree is already inside `if nodeToUpgrade.level == nodeToUpgrade.maxLevel then`
-    -- so this function is called only when a node is maxed.
-    -- We should ensure it only adds *one* child as per the new design, or if it could be called multiple times,
-    -- ensure it doesn't keep adding.
-    -- Let's assume it tries to add one child and if that spot is taken, it does nothing more *in this call*.
-
+    local parentNode = nodeToExpand
     local distance = 100
     local targetX, targetY
 
@@ -126,21 +122,25 @@ function Upgrades.expandTree(nodeToExpand)
         targetX, targetY = parentNode.x - distance, parentNode.y
     elseif parentNode.category == "Support" then
         targetX, targetY = parentNode.x, parentNode.y + distance
-    else -- Default fallback (e.g., if category is nil)
+    else
         targetX, targetY = parentNode.x + distance, parentNode.y
-        print("Warning: Node " .. parentNode.id .. " has undefined category. Defaulting expansion direction.")
+        print("  Warning: Node " .. parentNode.id .. " has undefined category '" .. tostring(parentNode.category) .. "'. Defaulting expansion direction (right).")
     end
+    print("  Targeting new child at (", targetX, ",", targetY, ")")
 
     local collisionDetected = false
-    local nodeVisualRadius = 15 -- As drawn in UI
-    local minSpacing = (nodeVisualRadius * 2) + 10 -- Diameter + buffer
+    local nodeVisualRadius = 15
+    local minSpacing = (nodeVisualRadius * 2) + 15 -- Diameter + 15px buffer (total 45)
 
     for _, existingNode in ipairs(Upgrades.nodes) do
+        if existingNode.id == parentNode.id then goto continue_check end -- Don't check collision with self
+
         if utils.distance(targetX, targetY, existingNode.x, existingNode.y) < minSpacing then
             collisionDetected = true
-            print("Collision detected at:", targetX, targetY, "for new child of node:", parentNode.id, ". Tried to expand from category:", parentNode.category)
+            print("  Collision DETECTED with existing node ID:", existingNode.id, "at (", existingNode.x, ",", existingNode.y, "). Distance:", utils.distance(targetX, targetY, existingNode.x, existingNode.y), "MinSpacing:", minSpacing)
             break
         end
+        ::continue_check::
     end
 
     if not collisionDetected then
@@ -159,20 +159,20 @@ function Upgrades.expandTree(nodeToExpand)
             level = 0,
             maxLevel = 10,
             effect = effectKey,
-            children = {}
+            category = parentNode.category, -- Child inherits parent's category
+            children = {},
+            maxed = false
         }
+        -- Upgrades.categorizeNode(newNode) -- No longer needed here due to inheritance
 
-        Upgrades.categorizeNode(newNode) -- Assign category based on ID
-
-        table.insert(parentNode.children, newNode) -- Store the actual node object
+        table.insert(parentNode.children, newNode)
         table.insert(Upgrades.nodes, newNode)
 
-        print("Expanded node", parentNode.id, "(category: "..parentNode.category..") to new node", newNode.id, "at", newNode.x, newNode.y, "with effect", newNode.effect, "and category", newNode.category)
+        print("  Expansion SUCCEEDED for node ID:", parentNode.id, ". New child ID:", newNode.id, "Category:", newNode.category, "Effect:", newNode.effect)
     else
-         print("Expansion skipped for node", parentNode.id, "due to collision at target:", targetX, targetY)
+         print("  Expansion SKIPPED for node ID:", parentNode.id, "due to collision.")
     end
 end
-
 
 function Upgrades.upgradeNode(nodeId, Player)
     local nodeToUpgrade = nil
@@ -186,14 +186,6 @@ function Upgrades.upgradeNode(nodeId, Player)
         Upgrades.recalculatePlayerBonuses(Player, Upgrades.nodes)
 
         if nodeToUpgrade.level == nodeToUpgrade.maxLevel then
-            -- Only attempt to expand if it hasn't been expanded before with the new logic.
-            -- Check children count: if 0, try to expand. If already has children, don't.
-            -- This assumes the new logic only adds one child at a time.
-            -- If the old logic (2 children) ran, #children would be 2.
-            -- If this new logic ran once, #children would be 1.
-            -- To prevent re-running and adding more children if it fails once due to collision:
-            -- A better way would be a flag on the node: `node.expansionAttempted = true`
-            -- For now, let's assume that if a maxed node has 0 children, it's eligible for this new expansion.
             if #nodeToUpgrade.children == 0 then
                  Upgrades.expandTree(nodeToUpgrade)
             end

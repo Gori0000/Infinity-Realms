@@ -54,7 +54,8 @@ local function calculateBulletDamage(bullet, playerData)
     return BASE_PROJECTILE_DAMAGE * (1 + damageBonusPercent / 100)
 end
 
-function Game.update(dt, Player, Enemies, config, utils)
+-- 'config_arg' here is the global 'Config' passed from main.lua
+function Game.update(dt, Player, Enemies, config_arg, utils)
     Game.shootCooldown = Game.shootCooldown - dt
 
     local cooldownReductionPercent = (Player.data.calculatedBonuses and Player.data.calculatedBonuses.CDR) or 0
@@ -78,7 +79,8 @@ function Game.update(dt, Player, Enemies, config, utils)
         local b = Game.bullets[i]
         if b then
             b.x, b.y = b.x + b.dx * dt, b.y + b.dy * dt
-            if b.x < 0 or b.x > config.windowWidth or b.y < 0 or b.y > config.windowHeight then
+            -- Use config_arg for boundary checks as it's passed to update
+            if b.x < 0 or b.x > config_arg.windowWidth or b.y < 0 or b.y > config_arg.windowHeight then
                 table.remove(Game.bullets, i)
             end
         end
@@ -133,16 +135,22 @@ function Game.update(dt, Player, Enemies, config, utils)
 end
 
 function Game.draw()
+    local currentSpriteScale = (Config and Config.spriteScale) or 1
+    if not Config then
+        print("Warning: Global Config not available in Game.draw(). Sprite scale may be incorrect.")
+    end
+
+    -- Draw bullets
     if Assets and Assets.projectile_blue then
         local projectileImage = Assets.projectile_blue
         local pWidth = projectileImage:getWidth()
         local pHeight = projectileImage:getHeight()
         love.graphics.setColor(1, 1, 1)
         for _, b in ipairs(Game.bullets) do
-            love.graphics.draw(projectileImage, b.x, b.y, 0, 1, 1, pWidth / 2, pHeight / 2)
+            love.graphics.draw(projectileImage, b.x, b.y, 0, currentSpriteScale, currentSpriteScale, pWidth / 2, pHeight / 2)
         end
     else
-        if Assets then -- Check if Assets table itself exists, even if projectile_blue doesn't
+        if Assets then
             print("Warning: Assets.projectile_blue is missing. Drawing circles for bullets.")
         end
         love.graphics.setColor(1, 1, 0)
@@ -152,26 +160,27 @@ function Game.draw()
     end
     love.graphics.setColor(1, 1, 1)
 
+    -- Draw loot
     for _, l in ipairs(Game.loot) do
-        local lootImage = Assets.loot and Assets.loot[l.type] -- Check Assets.loot exists
+        local lootImage = Assets.loot and Assets.loot[l.type]
 
         if lootImage then
             love.graphics.setColor(1, 1, 1)
             local lWidth = lootImage:getWidth()
             local lHeight = lootImage:getHeight()
-            love.graphics.draw(lootImage, l.x, l.y, 0, 1, 1, lWidth / 2, lHeight / 2)
+            love.graphics.draw(lootImage, l.x, l.y, 0, currentSpriteScale, currentSpriteScale, lWidth / 2, lHeight / 2)
         else
-            if Assets and Assets.loot then -- Only print warning if Assets.loot table itself was expected
+            if Assets and Assets.loot then
                  print("Info: No sprite for loot type: " .. (l.type or "unknown") .. ". Drawing fallback circle.")
             end
             if l.type == "coin" then
-                love.graphics.setColor(1, 0.84, 0) -- Gold/Yellow for coin fallback
+                love.graphics.setColor(1, 0.84, 0)
             elseif l.type == "essence_t1" then
-                love.graphics.setColor(0, 1, 0) -- Green for Tier 1 essence fallback
+                love.graphics.setColor(0, 1, 0)
             elseif l.type == "essence_t2" then
-                love.graphics.setColor(0.2, 0.5, 1) -- Blue for Tier 2 essence (current design)
+                love.graphics.setColor(0.2, 0.5, 1)
             else
-                love.graphics.setColor(1, 0, 1) -- Magenta for other unknown loot types
+                love.graphics.setColor(1, 0, 1)
             end
             love.graphics.circle("fill", l.x, l.y, l.radius or 5)
         end
