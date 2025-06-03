@@ -89,9 +89,9 @@ function Upgrades.initializeTree()
     local centerY = (Config and Config.windowHeight or 1080) / 2
 
     -- Define base offsets for the triangular layout
-    -- These values make them "pretty far away"
-    local baseVerticalOffset = 280
-    local baseHorizontalOffset = 320
+    -- These values make them "closer to center"
+    local baseVerticalOffset = 100 -- Reduced from 280
+    local baseHorizontalOffset = 120 -- Reduced from 320
 
     -- Apply UI scaling to offsets
     local verticalOffset = baseVerticalOffset * uiScale
@@ -249,23 +249,46 @@ end
 
 function Upgrades.upgradeNode(nodeId, Player)
     local nodeToUpgrade = nil
-    if nodeId >= 1 and nodeId <= #Upgrades.nodes then
+    if nodeId >= 1 and nodeId <= #Upgrades.nodes then -- Ensure nodeId is within bounds
         nodeToUpgrade = Upgrades.nodes[nodeId]
     end
 
-    if nodeToUpgrade and nodeToUpgrade.level < nodeToUpgrade.maxLevel then
-        nodeToUpgrade.level = nodeToUpgrade.level + 1
+    if not nodeToUpgrade then
+        print("Attempted to upgrade non-existent or out-of-bounds node with ID: " .. tostring(nodeId))
+        return false
+    end
 
-        Upgrades.recalculatePlayerBonuses(Player, Upgrades.nodes)
+    -- Node exists, now check if it can be upgraded
+    if nodeToUpgrade.level < nodeToUpgrade.maxLevel then
+        -- Check for skill points
+        -- Ensure Player and Player.data exist before trying to access skillPoints
+        if Player and Player.data and (Player.data.skillPoints or 0) >= 1 then
+            Player.data.skillPoints = Player.data.skillPoints - 1 -- Spend the point
 
-        -- Check for expansion at level 5
-        if nodeToUpgrade.level == 5 then
-            if #nodeToUpgrade.children == 0 then -- Ensure it only expands once
-                Upgrades.expandTree(nodeToUpgrade)
+            nodeToUpgrade.level = nodeToUpgrade.level + 1
+            Upgrades.recalculatePlayerBonuses(Player, Upgrades.nodes)
+
+            if nodeToUpgrade.level == 5 then -- Expansion trigger (as per previous modifications)
+                if #nodeToUpgrade.children == 0 then
+                    Upgrades.expandTree(nodeToUpgrade)
+                end
             end
+            print("Node " .. nodeToUpgrade.id .. " upgraded to level " .. nodeToUpgrade.level .. ". Skill points remaining: " .. Player.data.skillPoints)
+            return true
+        else
+            -- Not enough skill points or Player/Player.data is nil
+            local currentPoints = "N/A"
+            if Player and Player.data and Player.data.skillPoints ~= nil then
+                currentPoints = Player.data.skillPoints
+            elseif Player and Player.data then
+                 currentPoints = "0 (field missing?)"
+            end
+            print("Attempted to upgrade node " .. nodeToUpgrade.id .. " but not enough skill points. Current points: " .. currentPoints)
+            return false
         end
-        return true
     else
+        -- Node is already at max level
+        print("Attempted to upgrade node " .. nodeToUpgrade.id .. " but it's already at max level (" .. nodeToUpgrade.level .. "/" .. nodeToUpgrade.maxLevel .. ").")
         return false
     end
 end

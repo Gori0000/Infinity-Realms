@@ -11,7 +11,8 @@ Player.data = {
     exp = 0, level = 1, kills = 0,
     gold = 0, essence = {tier1 = 0, tier2 = 0},
     calculatedBonuses = {},
-    facingDirection = "S"
+    facingDirection = "S",
+    skillPoints = 10000 -- Add this line
 }
 
 Player.quads = {}

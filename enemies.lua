@@ -131,6 +131,14 @@ function Enemies.draw()
 
             love.graphics.setColor(1, 1, 1) -- Reset color after drawing this health bar
         end
+
+        -- Draw hitbox for regular enemy
+        if enemy and enemy.radius then
+            love.graphics.setColor(1, 1, 0, 0.5) -- Yellow, semi-transparent
+            love.graphics.setLineWidth(1)
+            love.graphics.circle("line", enemy.x, enemy.y, enemy.radius)
+            love.graphics.setColor(1, 1, 1) -- Reset color
+        end
     end
     -- love.graphics.setColor(1, 1, 1) -- This reset is now inside the loop or after boss
 
@@ -176,6 +184,14 @@ function Enemies.draw()
             love.graphics.rectangle("fill", bossBarX, bossBarY, bossBarWidth * bossHpPercent, bossHealthBarHeight)
 
             love.graphics.setColor(1, 1, 1) -- Reset color after drawing boss health bar
+        end
+
+        -- Draw hitbox for boss
+        if Enemies.boss.radius then
+            love.graphics.setColor(1, 1, 0, 0.5) -- Yellow, semi-transparent
+            love.graphics.setLineWidth(1)
+            love.graphics.circle("line", Enemies.boss.x, Enemies.boss.y, Enemies.boss.radius)
+            love.graphics.setColor(1, 1, 1) -- Reset color
         end
     end
     love.graphics.setColor(1, 1, 1) -- Final safety reset
