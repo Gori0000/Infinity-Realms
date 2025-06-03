@@ -17,10 +17,10 @@ Player.data = {
 Player.quads = {}
 
 function Player.initializeAnimation(playerSheetAsset)
-    Player.quads = {}
+    Player.quads = {} -- Clear existing quads
     if not playerSheetAsset then
         print("Error in Player.initializeAnimation: playerSheetAsset is nil. Cannot create quads.")
-        Player.quads["DEFAULT"] = nil -- Explicitly mark as problematic
+        Player.quads["DEFAULT"] = nil
         return
     end
 
@@ -34,7 +34,7 @@ function Player.initializeAnimation(playerSheetAsset)
     end
 
     local frameWidth = sheetWidth / 3
-    local frameHeight = sheetHeight / 3
+    local frameHeight = sheetHeight / 3 -- Assuming 3 rows effectively, even if row 3 of sprites is ignored for definitions
 
     if frameWidth <= 0 or frameHeight <= 0 then
         print("Error in Player.initializeAnimation: Calculated frameWidth or frameHeight is zero or negative. frameW:", frameWidth, "frameH:", frameHeight)
@@ -42,17 +42,23 @@ function Player.initializeAnimation(playerSheetAsset)
         return
     end
 
-    Player.quads["NW"] = love.graphics.newQuad(0, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
-    Player.quads["N"]  = love.graphics.newQuad(frameWidth, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
-    Player.quads["NE"] = love.graphics.newQuad(frameWidth * 2, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
-    Player.quads["W"]  = love.graphics.newQuad(0, frameHeight, frameWidth, frameHeight, sheetWidth, sheetHeight)
-    Player.quads["S"]  = love.graphics.newQuad(frameWidth, frameHeight, frameWidth, frameHeight, sheetWidth, sheetHeight)
-    Player.quads["E"]  = love.graphics.newQuad(frameWidth * 2, frameHeight, frameWidth, frameHeight, sheetWidth, sheetHeight)
-    Player.quads["SW"] = love.graphics.newQuad(0, frameHeight * 2, frameWidth, frameHeight, sheetWidth, sheetHeight)
-    Player.quads["SE"] = love.graphics.newQuad(frameWidth * 2, frameHeight * 2, frameWidth, frameHeight, sheetWidth, sheetHeight)
+    -- Row 1: N, S, W
+    Player.quads["N"] = love.graphics.newQuad(frameWidth * 0, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
+    Player.quads["S"] = love.graphics.newQuad(frameWidth * 1, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
+    Player.quads["W"] = love.graphics.newQuad(frameWidth * 2, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
+
+    -- Row 2: E, SE, E (second E from issue description)
+    Player.quads["E"] = love.graphics.newQuad(frameWidth * 0, frameHeight, frameWidth, frameHeight, sheetWidth, sheetHeight)
+    Player.quads["SE"] = love.graphics.newQuad(frameWidth * 1, frameHeight, frameWidth, frameHeight, sheetWidth, sheetHeight)
+    Player.quads["E_ALT"] = love.graphics.newQuad(frameWidth * 2, frameHeight, frameWidth, frameHeight, sheetWidth, sheetHeight) -- This is the 3rd frame of row 2
+
+    -- Define fallbacks for diagonal directions not explicitly in the new layout
+    Player.quads["NE"] = Player.quads["E"] -- Fallback for North-East
+    Player.quads["SW"] = Player.quads["W"] -- Fallback for South-West
+    Player.quads["NW"] = Player.quads["W"] -- Fallback for North-West
 
     Player.quads["DEFAULT"] = Player.quads["S"]
-    print("Player animation quads initialized. Frame W/H:", frameWidth, frameHeight)
+    print("Player animation quads initialized according to new layout. Frame W/H:", frameWidth, frameHeight)
 end
 
 function Player.applyCalculatedBonuses()

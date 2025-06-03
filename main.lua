@@ -1,3 +1,5 @@
+local upgradeTreeCameraSpeed = 300 -- pixels per second for tree camera movement
+
 function love.load()
     -- Load core modules first
     Config = require("config") -- Made global with capital
@@ -43,6 +45,23 @@ function love.update(dt)
 
     -- Game.update handles bullets, collisions (which then calls Enemies.damage... with callbacks), loot, level up etc.
     Game.update(dt, Player, Enemies, Config, utils) -- Pass global Config
+
+    -- Continuous camera movement for upgrade tree
+    if UI.state.showUpgradeTree then -- Check if tree is visible
+        local moveAmount = upgradeTreeCameraSpeed * dt
+        if love.keyboard.isDown("left") then
+            UI.moveUpgradeTreeCamera(-moveAmount, 0) -- To see left, decrease offset.x
+        end
+        if love.keyboard.isDown("right") then
+            UI.moveUpgradeTreeCamera(moveAmount, 0) -- To see right, increase offset.x
+        end
+        if love.keyboard.isDown("up") then
+            UI.moveUpgradeTreeCamera(0, -moveAmount) -- To see up, decrease offset.y
+        end
+        if love.keyboard.isDown("down") then
+            UI.moveUpgradeTreeCamera(0, moveAmount) -- To see down, increase offset.y
+        end
+    end
 end
 
 function love.draw()
@@ -81,22 +100,6 @@ function love.keypressed(key)
     -- Changed elseif to if for the 'c' key to make it an independent condition
     if key == "c" then
         Player.craftTier2Essence()
-    end
-
-    if key == "left" then
-        UI.moveUpgradeTreeCamera(20, 0)
-    end
-
-    if key == "right" then
-        UI.moveUpgradeTreeCamera(-20, 0)
-    end
-
-    if key == "up" then
-        UI.moveUpgradeTreeCamera(0, 20)
-    end
-
-    if key == "down" then
-        UI.moveUpgradeTreeCamera(0, -20)
     end
 end
 

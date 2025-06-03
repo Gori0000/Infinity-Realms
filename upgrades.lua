@@ -86,9 +86,9 @@ function Upgrades.initializeTree()
     local centerX = (Config and Config.windowWidth or 1920) / 2
     local centerY = (Config and Config.windowHeight or 1080) / 2
 
-    local initialNodeYOffset = 200 * uiScale
-    local initialNodeXOffset = 250 * uiScale
-    local supportNodeYDisplacement = 200 * uiScale
+    local initialNodeYOffset = 100 * uiScale
+    local initialNodeXOffset = 150 * uiScale
+    local supportNodeYDisplacement = 100 * uiScale
 
     local offenseNode = {
         id = 1, x = centerX - initialNodeXOffset, y = centerY - initialNodeYOffset,
@@ -112,72 +112,104 @@ function Upgrades.initializeTree()
 end
 
 function Upgrades.expandTree(nodeToExpand)
-    if not nodeToExpand then print("Error: expandTree called with nil nodeToExpand."); return end
+    if not nodeToExpand then
+        print("Error: expandTree called with nil nodeToExpand.")
+        return
+    end
 
     local uiScale = (Config and Config.uiScaleFactor) or 1
-    if not Config then print("Warning: Global Config not found in Upgrades.expandTree, using uiScale=1") end
+    if not Config then
+        print("Warning: Global Config not found in Upgrades.expandTree, using uiScale=1")
+    end
+
+    local centerX = (Config and Config.windowWidth or 1920) / 2
+    local centerY = (Config and Config.windowHeight or 1080) / 2
 
     print("Attempting to expand node ID:", nodeToExpand.id, "Category:", nodeToExpand.category, "at (", nodeToExpand.x, ",", nodeToExpand.y, ")")
 
     local parentNode = nodeToExpand
-    local distance = 100 * uiScale -- Scale expansion distance
-    local targetX, targetY
+    -- The 'distance' variable determines how far children are from parent.
+    -- This will be reviewed in the "Reduce Upgrade Tree Size" step.
+    local expansion_distance = 60 * uiScale
 
-    if parentNode.category == "Offense" then
-        targetX, targetY = parentNode.x + distance, parentNode.y
-    elseif parentNode.category == "Defense" then
-        targetX, targetY = parentNode.x - distance, parentNode.y
-    elseif parentNode.category == "Support" then
-        targetX, targetY = parentNode.x, parentNode.y + distance
+    local dirX = parentNode.x - centerX
+    local dirY = parentNode.y - centerY
+    local baseAngle
+
+    if math.abs(dirX) < 0.01 and math.abs(dirY) < 0.01 then -- Check if parent is effectively at the center
+        print("  Info: Parent node is at or near the center. Using default upward base angle for expansion.")
+        baseAngle = -math.pi / 2 -- Default to upward expansion
     else
-        targetX, targetY = parentNode.x + distance, parentNode.y
-        print("  Warning: Node " .. parentNode.id .. " has undefined category '" .. tostring(parentNode.category) .. "'. Defaulting expansion direction (right).")
+        baseAngle = math.atan2(dirY, dirX)
     end
-    print("  Targeting new child at (", targetX, ",", targetY, ")")
 
-    local collisionDetected = false
-    local nodeVisualRadius = 15 * uiScale -- Scale node radius for collision check
-    local buffer = 10 * uiScale           -- Scale buffer
+    local spreadAngleOffset = math.pi / 6 -- 30 degrees spread from baseAngle
+
+    -- Define two potential children based on angles
+    local potentialChildrenData = {
+        { angle = baseAngle - spreadAngleOffset, name = "Child 1 (angle - offset)" },
+        { angle = baseAngle + spreadAngleOffset, name = "Child 2 (angle + offset)" }
+    }
+
+    local nodeVisualRadius = 15 * uiScale -- Used for collision checking
+    local buffer = 10 * uiScale           -- Buffer space between nodes
     local minSpacing = (nodeVisualRadius * 2) + buffer
+    local childrenAddedCount = 0
 
-    for _, existingNode in ipairs(Upgrades.nodes) do
-        if existingNode.id == parentNode.id then goto continue_check end
+    for _, childInfo in ipairs(potentialChildrenData) do
+        local targetX = parentNode.x + expansion_distance * math.cos(childInfo.angle)
+        local targetY = parentNode.y + expansion_distance * math.sin(childInfo.angle)
+        print("  Prospective " .. childInfo.name .. " target coords: (", targetX, ",", targetY, ") angle: ", childInfo.angle)
 
-        if utils.distance(targetX, targetY, existingNode.x, existingNode.y) < minSpacing then
-            collisionDetected = true
-            print("  Collision DETECTED with existing node ID:", existingNode.id, "at (", existingNode.x, ",", existingNode.y, "). Distance:", utils.distance(targetX, targetY, existingNode.x, existingNode.y), "MinSpacing:", minSpacing)
-            break
+        local collisionDetected = false
+        for _, existingNode in ipairs(Upgrades.nodes) do
+            -- Essential: Do not check collision with the parent node itself
+            if existingNode.id == parentNode.id then
+                goto continue_collision_check
+            end
+
+            if utils.distance(targetX, targetY, existingNode.x, existingNode.y) < minSpacing then
+                collisionDetected = true
+                print("    Collision DETECTED for " .. childInfo.name .. " with existing node ID:", existingNode.id, "at (", existingNode.x, ",", existingNode.y, "). Dist:", utils.distance(targetX, targetY, existingNode.x, existingNode.y), "MinSpacing:", minSpacing)
+                break -- Stop checking for this child, it collides
+            end
+            ::continue_collision_check::
         end
-        ::continue_check::
+
+        if not collisionDetected then
+            local newId = #Upgrades.nodes + 1
+            local availableEffects = {}
+            for key, _ in pairs(Upgrades.effectParams) do
+                table.insert(availableEffects, key)
+            end
+            local effectKey = availableEffects[math.random(#availableEffects)]
+
+            local newNode = {
+                id = newId,
+                x = targetX,
+                y = targetY,
+                level = 0,
+                maxLevel = 10,
+                effect = effectKey,
+                category = parentNode.category, -- Inherit category from parent
+                children = {},
+                maxed = false
+            }
+            -- Upgrades.categorizeNode(newNode) -- This can be called if new nodes need re-categorization based on ID or other rules
+
+            table.insert(parentNode.children, newNode) -- Link child to parent
+            table.insert(Upgrades.nodes, newNode)     -- Add to global list of nodes
+            childrenAddedCount = childrenAddedCount + 1
+            print("    Expansion SUCCEEDED for " .. childInfo.name .. ". New child ID:", newNode.id, "Category:", newNode.category, "Effect:", newNode.effect)
+        else
+            print("    Expansion SKIPPED for " .. childInfo.name .. " due to collision.")
+        end
     end
 
-    if not collisionDetected then
-        local newId = #Upgrades.nodes + 1
-
-        local availableEffects = {}
-        for key, _ in pairs(Upgrades.effectParams) do
-            table.insert(availableEffects, key)
-        end
-        local effectKey = availableEffects[math.random(#availableEffects)]
-
-        local newNode = {
-            id = newId,
-            x = targetX,
-            y = targetY,
-            level = 0,
-            maxLevel = 10,
-            effect = effectKey,
-            category = parentNode.category,
-            children = {},
-            maxed = false
-        }
-
-        table.insert(parentNode.children, newNode)
-        table.insert(Upgrades.nodes, newNode)
-
-        print("  Expansion SUCCEEDED for node ID:", parentNode.id, ". New child ID:", newNode.id, "Category:", newNode.category, "Effect:", newNode.effect)
+    if childrenAddedCount == 0 then
+        print("  Expansion FAILED for node ID:", parentNode.id, "- no valid positions found for any new children.")
     else
-         print("  Expansion SKIPPED for node ID:", parentNode.id, "due to collision.")
+        print("  Expansion completed for node ID:", parentNode.id, ". Added " .. childrenAddedCount .. " child/children.")
     end
 end
 
@@ -192,9 +224,10 @@ function Upgrades.upgradeNode(nodeId, Player)
 
         Upgrades.recalculatePlayerBonuses(Player, Upgrades.nodes)
 
-        if nodeToUpgrade.level == nodeToUpgrade.maxLevel then
-            if #nodeToUpgrade.children == 0 then
-                 Upgrades.expandTree(nodeToUpgrade)
+        -- Check for expansion at level 5
+        if nodeToUpgrade.level == 5 then
+            if #nodeToUpgrade.children == 0 then -- Ensure it only expands once
+                Upgrades.expandTree(nodeToUpgrade)
             end
         end
         return true
