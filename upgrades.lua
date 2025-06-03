@@ -78,37 +78,71 @@ function Upgrades.recalculatePlayerBonuses(Player, nodes)
 end
 
 function Upgrades.initializeTree()
-    Upgrades.nodes = {}
+    Upgrades.nodes = {} -- Clear existing nodes
 
     local uiScale = (Config and Config.uiScaleFactor) or 1
-    if not Config then print("Warning: Global Config not found in Upgrades.initializeTree, using uiScale=1") end
+    if not Config then
+        print("Warning: Global Config not found in Upgrades.initializeTree, using uiScale=1")
+    end
 
     local centerX = (Config and Config.windowWidth or 1920) / 2
     local centerY = (Config and Config.windowHeight or 1080) / 2
 
-    local initialNodeYOffset = 100 * uiScale
-    local initialNodeXOffset = 150 * uiScale
-    local supportNodeYDisplacement = 100 * uiScale
+    -- Define base offsets for the triangular layout
+    -- These values make them "pretty far away"
+    local baseVerticalOffset = 280
+    local baseHorizontalOffset = 320
 
-    local offenseNode = {
-        id = 1, x = centerX - initialNodeXOffset, y = centerY - initialNodeYOffset,
-        level = 0, maxLevel = 10, effect = "DMG", category = "Offense",
-        children = {}, maxed = false
-    }
-    local defenseNode = {
-        id = 2, x = centerX + initialNodeXOffset, y = centerY - initialNodeYOffset,
-        level = 0, maxLevel = 10, effect = "HP_MAX", category = "Defense",
-        children = {}, maxed = false
-    }
+    -- Apply UI scaling to offsets
+    local verticalOffset = baseVerticalOffset * uiScale
+    local horizontalOffset = baseHorizontalOffset * uiScale
+
+    -- Define the three initial nodes with specific categories and positions
+
+    -- Top Node (Support) - Green
     local supportNode = {
-        id = 3, x = centerX, y = (centerY - initialNodeYOffset) + supportNodeYDisplacement, -- Ensure Y is relative to initial line
-        level = 0, maxLevel = 10, effect = "CDR", category = "Support",
-        children = {}, maxed = false
+        id = 1,
+        x = centerX,
+        y = centerY - verticalOffset, -- Positioned towards the top
+        level = 0, maxLevel = 10,
+        effect = "CDR", -- Cooldown Reduction is a common support effect
+        category = "Support",
+        children = {},
+        maxed = false
     }
 
-    table.insert(Upgrades.nodes, offenseNode)
-    table.insert(Upgrades.nodes, defenseNode)
+    -- Bottom-Left Node (Defense) - Blue
+    local defenseNode = {
+        id = 2,
+        x = centerX - horizontalOffset, -- Positioned to the bottom-left
+        y = centerY + verticalOffset,
+        level = 0, maxLevel = 10,
+        effect = "HP_MAX", -- Max HP is a common defense effect
+        category = "Defense",
+        children = {},
+        maxed = false
+    }
+
+    -- Bottom-Right Node (Offense) - Red
+    local offenseNode = {
+        id = 3,
+        x = centerX + horizontalOffset, -- Positioned to the bottom-right
+        y = centerY + verticalOffset,
+        level = 0, maxLevel = 10,
+        effect = "DMG", -- Damage is a common offense effect
+        category = "Offense",
+        children = {},
+        maxed = false
+    }
+
     table.insert(Upgrades.nodes, supportNode)
+    table.insert(Upgrades.nodes, defenseNode)
+    table.insert(Upgrades.nodes, offenseNode)
+
+    print("Upgrades.initializeTree: Created new triangular layout. Top (Support), BL (Defense), BR (Offense).")
+    print("  Support Node (ID 1): x=" .. supportNode.x .. ", y=" .. supportNode.y)
+    print("  Defense Node (ID 2): x=" .. defenseNode.x .. ", y=" .. defenseNode.y)
+    print("  Offense Node (ID 3): x=" .. offenseNode.x .. ", y=" .. offenseNode.y)
 end
 
 function Upgrades.expandTree(nodeToExpand)
