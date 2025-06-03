@@ -22,27 +22,46 @@ function Enemies.spawnRegularEnemy(realmNumber)
 
     local enemySpriteKey = availableEnemySpriteKeys[math.random(#availableEnemySpriteKeys)]
     local initialHp = 30 * mult
+    local baseSpeed = 60 -- Default base speed
     table.insert(Enemies.list, {
         x = x, y = y,
         radius = 24,
-        speed = 60,
+        speed = baseSpeed,
+        originalSpeed = baseSpeed, -- Store original speed
         hp = initialHp,
-        maxHp = initialHp, -- Add this line
+        maxHp = initialHp,
         exp = 10 * mult,
         spriteKey = enemySpriteKey,
+        statusEffects = {} -- Initialize status effects table
     })
 end
 
 function Enemies.spawnBoss()
     local initialBossHp = 1000
+    local baseSpeed = 40 -- Default boss base speed
     Enemies.boss = {
-        x = 400, y = 50, radius = 60, speed = 40,
+        x = 400, y = 50, radius = 60, speed = baseSpeed,
+        originalSpeed = baseSpeed, -- Store original speed
         hp = initialBossHp,
-        maxHp = initialBossHp, -- Add this line
+        maxHp = initialBossHp,
         exp = 500,
-        spriteKey = nil
+        spriteKey = nil,
+        statusEffects = {} -- Initialize status effects table
     }
     Enemies.bossSpawned = true
+end
+
+function Enemies.applyStatusEffect(enemyRef, effectName, duration, magnitude, relatedData)
+    if not enemyRef or not enemyRef.statusEffects then
+        print("Warning: Attempted to apply status effect to invalid enemyRef.")
+        return
+    end
+    -- print("Applying effect: " .. effectName .. " to enemy. Duration: " .. duration .. ", Mag: " .. magnitude)
+    enemyRef.statusEffects[effectName] = {
+        timer = duration,
+        magnitude = magnitude,
+        data = relatedData or {}
+    }
 end
 
 function Enemies.update(dt, playerData, realmProviderFunc, killsProviderFunc)
@@ -57,19 +76,112 @@ function Enemies.update(dt, playerData, realmProviderFunc, killsProviderFunc)
         Enemies.spawnBoss()
     end
 
+    local enemiesToRemoveIndices = {} -- Store indices of enemies to remove
+
+    -- Update regular enemies
     for i = #Enemies.list, 1, -1 do
         local e = Enemies.list[i]
-        if e then
-            local angle = math.atan2(playerData.y - e.y, playerData.x - e.x)
-            e.x = e.x + math.cos(angle) * e.speed * dt
-            e.y = e.y + math.sin(angle) * e.speed * dt
+        if not e then goto next_enemy_loop end
+
+        local currentSpeedModifier = 0
+        local effectsToRemove = {}
+        local accumulatedBurnDamage = 0
+        local accumulatedDotDamage = 0 -- For DOT effects
+
+        if e.statusEffects then
+            for effectName, effectData in pairs(e.statusEffects) do
+                effectData.timer = effectData.timer - dt
+                if effectData.timer <= 0 then
+                    table.insert(effectsToRemove, effectName)
+                else
+                    if effectName == "slow" then
+                        currentSpeedModifier = math.max(currentSpeedModifier, effectData.magnitude)
+                    elseif effectName == "burn" then
+                        accumulatedBurnDamage = accumulatedBurnDamage + (effectData.magnitude * dt)
+                    elseif effectName == "dot" then -- Handle DOT
+                        accumulatedDotDamage = accumulatedDotDamage + (effectData.magnitude * dt)
+                    end
+                end
+            end
+            for _, effectName in ipairs(effectsToRemove) do
+                e.statusEffects[effectName] = nil
+            end
         end
+
+        e.speed = e.originalSpeed * (1 - currentSpeedModifier)
+
+        if accumulatedBurnDamage > 0 then
+            e.hp = e.hp - accumulatedBurnDamage
+        end
+        if accumulatedDotDamage > 0 then -- Apply DOT damage
+            e.hp = e.hp - accumulatedDotDamage
+        end
+
+        if e.hp <= 0 then -- Check for death after all damage sources for the frame
+            table.insert(enemiesToRemoveIndices, i)
+            goto next_enemy_loop -- Skip movement if dead
+        end
+
+        local angle = math.atan2(playerData.y - e.y, playerData.x - e.x)
+        e.x = e.x + math.cos(angle) * e.speed * dt
+        e.y = e.y + math.sin(angle) * e.speed * dt
+        ::next_enemy_loop::
     end
 
+    -- Remove dead enemies (from burn)
+    -- Sort indices in descending order to remove correctly
+    table.sort(enemiesToRemoveIndices, function(a,b) return a > b end)
+    for _, index in ipairs(enemiesToRemoveIndices) do
+        table.remove(Enemies.list, index)
+    end
+
+    -- Update Boss
     if Enemies.boss then
-        local angle = math.atan2(playerData.y - Enemies.boss.y, playerData.x - Enemies.boss.x)
-        Enemies.boss.x = Enemies.boss.x + math.cos(angle) * Enemies.boss.speed * dt
-        Enemies.boss.y = Enemies.boss.y + math.sin(angle) * Enemies.boss.speed * dt
+        local boss = Enemies.boss
+        local currentSpeedModifier = 0
+        local effectsToRemove = {}
+        local accumulatedBurnDamage = 0
+        local accumulatedDotDamage = 0 -- For DOT effects
+
+        if boss.statusEffects then
+            for effectName, effectData in pairs(boss.statusEffects) do
+                effectData.timer = effectData.timer - dt
+                if effectData.timer <= 0 then
+                    table.insert(effectsToRemove, effectName)
+                else
+                    if effectName == "slow" then
+                        currentSpeedModifier = math.max(currentSpeedModifier, effectData.magnitude)
+                    elseif effectName == "burn" then
+                        accumulatedBurnDamage = accumulatedBurnDamage + (effectData.magnitude * dt)
+                    elseif effectName == "dot" then -- Handle DOT for boss
+                        accumulatedDotDamage = accumulatedDotDamage + (effectData.magnitude * dt)
+                    end
+                end
+            end
+            for _, effectName in ipairs(effectsToRemove) do
+                boss.statusEffects[effectName] = nil
+            end
+        end
+
+        boss.speed = boss.originalSpeed * (1 - currentSpeedModifier)
+
+        if accumulatedBurnDamage > 0 then
+            boss.hp = boss.hp - accumulatedBurnDamage
+        end
+        if accumulatedDotDamage > 0 then -- Apply DOT damage to boss
+            boss.hp = boss.hp - accumulatedDotDamage
+        end
+
+        if boss.hp <= 0 then
+            Enemies.boss = nil -- Boss is defeated
+             -- No exp/loot from this path yet.
+        end
+
+        if Enemies.boss then -- Check if boss still exists after all damage
+            local angle = math.atan2(playerData.y - boss.y, playerData.x - boss.x)
+            boss.x = boss.x + math.cos(angle) * boss.speed * dt
+            boss.y = boss.y + math.sin(angle) * boss.speed * dt
+        end
     end
 end
 

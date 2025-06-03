@@ -4,11 +4,15 @@ UI.state = {
     showInventory = false,
     showUpgradeTree = true,
     showRealmList = false,
-    showStatsMenu = false, -- Add this line
-    showPauseMenu = false
+    showStatsMenu = false,
+    showPauseMenu = false,
+    currentUpgradeTreeView = "player", -- "player" or "spell"
+    currentSpellSlotView = 1 -- 1 to 5, relevant if currentUpgradeTreeView is "spell"
 }
 
 UI.pauseMenuButtons = {} -- To store button data for click detection
+UI.upgradeTreeViewSwitchButtons = {} -- For "Player", "Spell 1-5" buttons
+UI.spellSlotRegions = {} -- For HUD spell slot hover detection (tooltips)
 
 UI.treeOffset = { x = 0, y = 0 } -- This offset itself is not scaled by uiScaleFactor, it's a camera pan.
 UI.treeZoom = 1.0
@@ -102,10 +106,79 @@ function UI.drawRealmList(realmsTable, currentRealm)
     end
 end
 
-function UI.drawUpgradeTree(upgradeNodesTable, effectParams)
+-- Modified to accept nodesToDraw, effectParams, the source of upgrades (Player.data.upgrades or spell.upgrades), and a treeIdentifier
+function UI.drawUpgradeTree(nodesToDraw, currentEffectParams, upgradesSource, treeIdentifier)
     if not UI.state.showUpgradeTree then return end
 
+    local uiScale = (Config and Config.uiScaleFactor) or 1 -- Ensure uiScale is available at the top
+
+    -- First, draw tree switching UI elements (outside the zoom/pan push/pop)
+    UI.upgradeTreeViewSwitchButtons = {} -- Clear previous buttons
+    love.graphics.setColor(0.8, 0.8, 0.8, 1) -- Light grey for text buttons
+    local switchButtonHeight = 20 * uiScale
+    local switchButtonY = 10 * uiScale
+    local switchButtonXStart = 10 * uiScale
+    local buttonPadding = 10 * uiScale
+
+    local viewOptions = {"Player Tree"}
+    for i=1,5 do table.insert(viewOptions, "Spell " .. i) end
+
+    local currentX = switchButtonXStart
+    for i, viewName in ipairs(viewOptions) do
+        local textWidth = love.graphics.getFont():getWidth(viewName)
+        local btnW = textWidth + buttonPadding
+
+        -- Highlight active view
+        local isActive = false
+        if viewName == "Player Tree" and UI.state.currentUpgradeTreeView == "player" then
+            isActive = true
+        elseif string.sub(viewName, 1, 5) == "Spell" then
+            local slotNum = tonumber(string.sub(viewName, 7))
+            if UI.state.currentUpgradeTreeView == "spell" and UI.state.currentSpellSlotView == slotNum then
+                isActive = true
+            end
+        end
+
+        if isActive then
+            love.graphics.setColor(1,1,0,1) -- Yellow for active
+        else
+            love.graphics.setColor(0.7,0.7,0.7,1) -- Grey for inactive
+        end
+        love.graphics.print(viewName, currentX, switchButtonY)
+
+        table.insert(UI.upgradeTreeViewSwitchButtons, {
+            id = viewName, -- e.g., "Player Tree" or "Spell 1"
+            x = currentX, y = switchButtonY, w = btnW, h = switchButtonHeight
+        })
+        currentX = currentX + btnW + buttonPadding
+    end
+    love.graphics.setColor(1,1,1) -- Reset color
+
+    -- Display current tree path for clarity (below switch buttons)
+    local treePathDisplayY = switchButtonY + switchButtonHeight + (5 * uiScale)
+    local currentTreeName = "Unknown Tree"
+    if treeIdentifier == "player" then
+        currentTreeName = "Player Attributes Tree"
+    elseif treeIdentifier then -- Should be a spell ID if not player
+        currentTreeName = "Spell Tree: " .. treeIdentifier
+    end
+    if nodesToDraw == nil or #nodesToDraw == 0 then
+        currentTreeName = currentTreeName .. " (No data or spell not equipped)"
+    end
+    love.graphics.print("Viewing: " .. currentTreeName, switchButtonXStart, treePathDisplayY)
+    love.graphics.print("Spell Points: " .. (Player and Player.data and Player.data.spellUpgradePoints or 0), switchButtonXStart, treePathDisplayY + (15 * uiScale))
+    love.graphics.print("Skill Points: " .. (Player and Player.data and Player.data.skillPoints or 0), switchButtonXStart, treePathDisplayY + (30 * uiScale))
+
+
     love.graphics.push()
+    -- Ensure upgradeNodesTable and effectParams are the passed arguments nodesToDraw and currentEffectParams
+    if not nodesToDraw or not currentEffectParams then
+        -- print("UI.drawUpgradeTree: nodesToDraw or currentEffectParams are nil. TreeIdentifier: " .. tostring(treeIdentifier))
+        love.graphics.print("No upgrade data for current selection.", love.graphics.getWidth()/3, love.graphics.getHeight()/2)
+        love.graphics.pop()
+        return
+    end
+
     local centerX = love.graphics.getWidth() / 2
     local centerY = love.graphics.getHeight() / 2
 
@@ -114,7 +187,6 @@ function UI.drawUpgradeTree(upgradeNodesTable, effectParams)
     love.graphics.scale(UI.treeZoom, UI.treeZoom)
     love.graphics.translate(-centerX + UI.treeOffset.x, -centerY + UI.treeOffset.y)
 
-    local uiScale = (Config and Config.uiScaleFactor) or 1
     -- nodeRadius is now the base model radius; visual size comes from graphics transform
     local nodeDrawRadius = 15
     -- Text offsets and line widths will also be affected by the scale transform.
@@ -131,8 +203,7 @@ function UI.drawUpgradeTree(upgradeNodesTable, effectParams)
     local scaledLineWidth = math.max(1, (1 * uiScale) / UI.treeZoom ) -- Attempt to keep line width somewhat consistent
     local scaledBorderWidth = math.max(1, (2 * uiScale) / UI.treeZoom ) -- Attempt to keep border width somewhat consistent
 
-
-    for _, node in ipairs(upgradeNodesTable) do
+    for _, node in ipairs(nodesToDraw) do
         local r, g, b = defaultFillR, defaultFillG, defaultFillB
         if node.category == "Offense" then r, g, b = offenseColorR, offenseColorG, offenseColorB
         elseif node.category == "Defense" then r, g, b = defenseColorR, defenseColorG, defenseColorB
@@ -150,10 +221,22 @@ function UI.drawUpgradeTree(upgradeNodesTable, effectParams)
 
         -- love.graphics.print doesn't use line width. Text will scale with the main transform.
         love.graphics.setColor(textColorR, textColorG, textColorB)
-        local levelStr = node.level .. "/" .. node.maxLevel
-        if node.maxed then
-            levelStr = levelStr .. " (MAXED +3)"
+
+        local currentLevel
+        if treeIdentifier == "player" then
+            currentLevel = node.level -- Player tree nodes store their own level
+        else
+            currentLevel = upgradesSource[node.id] or 0 -- Spell tree levels from playerSpellInstance.upgrades
         end
+        local levelStr = currentLevel .. "/" .. node.maxLevel
+
+        -- Maxed display for player tree specifically (spell tree maxed logic might differ or not be needed here)
+        if treeIdentifier == "player" and node.maxed then
+            levelStr = levelStr .. " (MAXED +3)"
+        elseif treeIdentifier ~= "player" and currentLevel == node.maxLevel then
+             levelStr = levelStr .. " (MAXED)" -- Simple max display for spell nodes
+        end
+
         -- Scaled text offsets - these are in world units relative to node.x, node.y
         -- The uiScale here makes them consistent with other UI elements if zoom is 1.
         -- They will naturally scale with UI.treeZoom.
@@ -166,11 +249,13 @@ function UI.drawUpgradeTree(upgradeNodesTable, effectParams)
 
         local effectKey = node.effect
         local effectDisplayName = effectKey
-        if effectParams and effectParams[effectKey] and effectParams[effectKey].name then
-            effectDisplayName = effectParams[effectKey].name
+        if currentEffectParams and currentEffectParams[effectKey] and currentEffectParams[effectKey].name then
+            effectDisplayName = currentEffectParams[effectKey].name
         end
+
+        local nodeName = node.name or effectDisplayName -- Use node.name if available (for spell tree nodes)
         local categoryDisplayName = node.category or "N/A"
-        love.graphics.print(effectDisplayName .. " [" .. categoryDisplayName .. "]", node.x - textOffsetXEffect, node.y + textOffsetYEffect)
+        love.graphics.print(nodeName .. " [" .. categoryDisplayName .. "]", node.x - textOffsetXEffect, node.y + textOffsetYEffect)
 
         love.graphics.setColor(lineColorR, lineColorG, lineColorB)
         love.graphics.setLineWidth(scaledLineWidth)
@@ -340,5 +425,76 @@ function UI.drawPauseMenu()
     end
     love.graphics.setColor(1,1,1) -- Reset color
 end
+
+function UI.drawSpellSlots(playerSpells)
+    if not playerSpells then return end
+
+    local uiScale = (Config and Config.uiScaleFactor) or 1
+    local slotSize = 48 * uiScale
+    local slotSpacing = 10 * uiScale
+    local numSlots = 5
+
+    local totalWidth = (numSlots * slotSize) + ((numSlots - 1) * slotSpacing)
+    local startX = (love.graphics.getWidth() - totalWidth) / 2
+    local startY = love.graphics.getHeight() - (slotSize + (10 * uiScale))
+
+    UI.spellSlotRegions = {} -- Clear for current frame
+
+    for i = 1, numSlots do
+        local slotX = startX + (i - 1) * (slotSize + slotSpacing)
+        local slotY = startY
+        local playerSpell = playerSpells[i]
+
+        -- Store region for tooltips/interaction
+        table.insert(UI.spellSlotRegions, {
+            slotIndex = i,
+            x = slotX, y = slotY, w = slotSize, h = slotSize
+        })
+
+        -- Draw slot background
+        love.graphics.setColor(0.2, 0.2, 0.2, 0.8)
+        love.graphics.rectangle("fill", slotX, slotY, slotSize, slotSize)
+        love.graphics.setColor(0.5, 0.5, 0.5, 0.8)
+        love.graphics.rectangle("line", slotX, slotY, slotSize, slotSize)
+
+        if playerSpell then
+            -- Draw Icon
+            if playerSpell.icon then
+                local iconFileName = playerSpell.icon:match("([^/]+)%.png$") -- e.g., "spell_fireball"
+                if iconFileName and Assets and Assets[iconFileName] then
+                    local iconImage = Assets[iconFileName]
+                    local scaleX = slotSize / iconImage:getWidth()
+                    local scaleY = slotSize / iconImage:getHeight()
+                    love.graphics.setColor(1,1,1)
+                    love.graphics.draw(iconImage, slotX, slotY, 0, scaleX, scaleY)
+                else
+                    love.graphics.setColor(0.4, 0.4, 0.4, 0.8) -- Placeholder for missing icon
+                    love.graphics.rectangle("fill", slotX + slotSize*0.1, slotY + slotSize*0.1, slotSize*0.8, slotSize*0.8)
+                    love.graphics.setColor(1,1,1)
+                    love.graphics.print("?", slotX + slotSize/2 - love.graphics.getFont():getWidth("?")/2, slotY + slotSize/2 - love.graphics.getFont():getHeight()/2)
+                end
+            end
+
+            -- Draw Keybind Text (e.g., "1")
+            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.print(tostring(i), slotX + 3 * uiScale, slotY + 3 * uiScale)
+
+            -- Draw Cooldown Overlay
+            if playerSpell.currentCooldown > 0 and playerSpell.calculatedCooldown > 0 then
+                local cooldownPercent = playerSpell.currentCooldown / playerSpell.calculatedCooldown
+                local overlayHeight = slotSize * cooldownPercent
+                love.graphics.setColor(0, 0, 0, 0.7)
+                love.graphics.rectangle("fill", slotX, slotY + (slotSize - overlayHeight), slotSize, overlayHeight)
+            end
+        else
+            -- Empty slot
+            love.graphics.setColor(0.8, 0.8, 0.8, 1)
+            love.graphics.print(tostring(i), slotX + 3 * uiScale, slotY + 3 * uiScale)
+            -- Optional: Draw an "Empty" text or different background
+        end
+    end
+    love.graphics.setColor(1,1,1) -- Reset color
+end
+
 
 return UI

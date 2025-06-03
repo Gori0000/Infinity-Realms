@@ -35,6 +35,13 @@ Assets.loot = {
     -- essence_t2 will be handled by fallback color in Game.draw() as it has no sprite
 }
 
+-- Spell Icons (attempt to load, will be nil if files don't exist)
+Assets.spell_fireball = loadImage("spell_fireball.png")
+Assets.spell_icelance = loadImage("spell_icelance.png")
+Assets.spell_chainbolt = loadImage("spell_chainbolt.png")
+Assets.spell_wave = loadImage("spell_wave.png")
+Assets.spell_voidbeam = loadImage("spell_voidbeam.png")
+
 -- Example for UI or other assets if they were images:
 -- Assets.ui = {
 --    inventory_panel = loadImage("inventory_panel.png")

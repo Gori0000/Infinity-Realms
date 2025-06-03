@@ -28,6 +28,16 @@ Upgrades.effectParams = {
     }
 }
 
+Upgrades.spellTreeDefinitions = {} -- To store each spell's unique tree structure template
+Upgrades.spellEffectParams = {
+    SPELL_DMG = { name = "Damage Inc.", base = 50, falloff = 0.9, unit = "%" },
+    SPELL_CDR = { name = "Cooldown Red.", base = 30, falloff = 0.9, unit = "%" },
+    SPELL_RANGE = { name = "Range Inc.", base = 100, falloff = 0.85, unit = "units" },
+    SPELL_AOE = { name = "AoE Inc.", base = 50, falloff = 0.88, unit = "%" },
+    SPELL_PIERCE = { name = "Pierce Inc.", base = 3, falloff = 0.7, unit = "hits" }
+    -- Future: SPELL_DURATION, SPELL_EFFECT_STRENGTH, etc.
+}
+
 Upgrades.nodes = {}
 
 function Upgrades.categorizeNode(node)
@@ -295,6 +305,139 @@ end
 
 function Upgrades.getNodes()
     return Upgrades.nodes
+end
+
+-- For Spell Upgrade Trees
+function Upgrades.initializeSpellTreeDefinition(spellId, baseSpellData)
+    local treeNodes = {}
+    -- Create a simple, standardized tree for now. E.g., 3 nodes.
+    -- Positions are relative for now, can be laid out better in UI.drawUpgradeTree later.
+    -- These x,y are more like abstract positions or could be used if drawing them on a fixed small grid.
+
+    -- Node 1: Damage
+    table.insert(treeNodes, {
+        id = 1, x = 100, y = 100, level = 0, maxLevel = 10, -- Level here is maxLevel for the definition
+        effect = "SPELL_DMG", category = "Offense", children = {}, maxed = false,
+        name = "Damage", description = "Increases spell damage."
+    })
+
+    -- Node 2: Cooldown
+    table.insert(treeNodes, {
+        id = 2, x = 100, y = 200, level = 0, maxLevel = 10,
+        effect = "SPELL_CDR", category = "Utility", children = {}, maxed = false,
+        name = "Cooldown", description = "Reduces spell cooldown."
+    })
+
+    -- Node 3: Utility (Range for projectiles/beams, AoE for AoE spells)
+    local utilityEffect = "SPELL_RANGE"
+    local utilityName = "Range/Effect"
+    local utilityDesc = "Increases range or area of effect."
+    if baseSpellData.type == "aoe_centered" then
+        utilityEffect = "SPELL_AOE"
+    elseif baseSpellData.type == "projectile" and baseSpellData.aoeRadius > 0 then
+         utilityEffect = "SPELL_AOE" -- If projectile has an AoE component, upgrade that
+    end
+
+    table.insert(treeNodes, {
+        id = 3, x = 100, y = 300, level = 0, maxLevel = 10,
+        effect = utilityEffect, category = "Utility", children = {}, maxed = false,
+        name = utilityName, description = utilityDesc
+    })
+
+    -- Pierce node if applicable for projectiles
+    if baseSpellData.type == "projectile" then
+        table.insert(treeNodes, {
+            id = 4, x = 100, y = 400, level = 0, maxLevel = 5, -- Max 5 levels for pierce
+            effect = "SPELL_PIERCE", category = "Offense", children = {}, maxed = false,
+            name = "Pierce", description = "Increases projectile pierce count."
+        })
+    end
+
+    Upgrades.spellTreeDefinitions[spellId] = { nodes = treeNodes }
+    -- print("Initialized spell tree definition for: " .. spellId)
+end
+
+function Upgrades.recalculateSpellStats(playerSpellInstance, spellTreeDefinition)
+    if not playerSpellInstance or not spellTreeDefinition then
+        -- print("Warning: Missing playerSpellInstance or spellTreeDefinition for recalculateSpellStats.")
+        return
+    end
+
+    -- Reset to base stats before applying bonuses
+    playerSpellInstance.calculatedDamage = playerSpellInstance.baseDamage
+    playerSpellInstance.calculatedCooldown = playerSpellInstance.baseCooldown
+    playerSpellInstance.calculatedRange = playerSpellInstance.baseRange
+    playerSpellInstance.calculatedAoeRadius = playerSpellInstance.baseAoeRadius
+    playerSpellInstance.calculatedPierce = playerSpellInstance.basePierce
+    -- calculatedEffects might need more complex logic later
+
+    for _, nodeDef in ipairs(spellTreeDefinition.nodes) do
+        local nodeLevel = playerSpellInstance.upgrades[nodeDef.id] or 0
+        if nodeLevel > 0 then
+            local effectParams = Upgrades.spellEffectParams[nodeDef.effect]
+            if effectParams then
+                local bonus = effectParams.base * (1 - effectParams.falloff ^ nodeLevel)
+
+                if nodeDef.effect == "SPELL_DMG" then
+                    playerSpellInstance.calculatedDamage = playerSpellInstance.calculatedDamage * (1 + bonus / 100)
+                elseif nodeDef.effect == "SPELL_CDR" then
+                    playerSpellInstance.calculatedCooldown = playerSpellInstance.calculatedCooldown * (1 - bonus / 100)
+                elseif nodeDef.effect == "SPELL_RANGE" then
+                    playerSpellInstance.calculatedRange = playerSpellInstance.calculatedRange + bonus
+                elseif nodeDef.effect == "SPELL_AOE" then
+                    playerSpellInstance.calculatedAoeRadius = playerSpellInstance.calculatedAoeRadius * (1 + bonus / 100)
+                elseif nodeDef.effect == "SPELL_PIERCE" then
+                    playerSpellInstance.calculatedPierce = playerSpellInstance.calculatedPierce + bonus
+                end
+            end
+        end
+    end
+    -- print("Recalculated stats for spell: " .. playerSpellInstance.id .. ", Dmg: " .. playerSpellInstance.calculatedDamage)
+end
+
+function Upgrades.upgradeSpellNode(playerSpellInstance, nodeId, spellTreeDefinition, playerData)
+    if not playerSpellInstance or not spellTreeDefinition or not playerData then
+        print("Error: Missing arguments for Upgrades.upgradeSpellNode.")
+        return false
+    end
+
+    local nodeToUpgrade = nil
+    for _, nodeDef in ipairs(spellTreeDefinition.nodes) do
+        if nodeDef.id == nodeId then
+            nodeToUpgrade = nodeDef
+            break
+        end
+    end
+
+    if not nodeToUpgrade then
+        print("Attempted to upgrade non-existent spell node with ID: " .. tostring(nodeId) .. " for spell " .. playerSpellInstance.id)
+        return false
+    end
+
+    local currentLevel = playerSpellInstance.upgrades[nodeId] or 0
+    if currentLevel < nodeToUpgrade.maxLevel then
+        if (playerData.spellUpgradePoints or 0) >= 1 then
+            playerData.spellUpgradePoints = playerData.spellUpgradePoints - 1
+            playerSpellInstance.upgrades[nodeId] = currentLevel + 1
+
+            -- Mark as maxed if applicable (for spell tree nodes, this is just for data, UI might use it)
+            if playerSpellInstance.upgrades[nodeId] == nodeToUpgrade.maxLevel then
+                 -- We don't store 'maxed' bool directly in playerSpellInstance.upgrades,
+                 -- but can check against nodeToUpgrade.maxLevel.
+                 -- The 'nodeToUpgrade.maxed' in the definition is not per-instance.
+            end
+
+            Upgrades.recalculateSpellStats(playerSpellInstance, spellTreeDefinition)
+            -- print("Spell node " .. nodeToUpgrade.id .. " for " .. playerSpellInstance.id .. " upgraded to level " .. playerSpellInstance.upgrades[nodeId] .. ". Spell points remaining: " .. playerData.spellUpgradePoints)
+            return true
+        else
+            -- print("Not enough spell upgrade points for spell " .. playerSpellInstance.id .. ", node " .. nodeId)
+            return false
+        end
+    else
+        -- print("Spell node " .. nodeId .. " for " .. playerSpellInstance.id .. " already at max level.")
+        return false
+    end
 end
 
 return Upgrades
