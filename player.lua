@@ -39,39 +39,29 @@ function Player.update(dt)
 end
 
 function Player.draw()
-    if Assets and Assets.player_spritesheet then
+    if Assets and Assets.player_spritesheet and Config then -- Ensure Config is available
         local playerImage = Assets.player_spritesheet
         local width = playerImage:getWidth()
         local height = playerImage:getHeight()
 
-        -- Assuming the spritesheet might have multiple rows/columns for animations.
-        -- For now, let's assume we want to draw only one frame of the wizard.
-        -- If the wizard is, for example, 32x32 pixels and is the first frame in the sheet:
-        -- local frameWidth = 32
-        -- local frameHeight = 32
-        -- local quad = love.graphics.newQuad(0, 0, frameWidth, frameHeight, width, height)
-        -- love.graphics.draw(playerImage, quad, Player.data.x, Player.data.y, 0, 1, 1, frameWidth / 2, frameHeight / 2)
-
-        -- As per task, draw the whole sheet centered if specific frame logic isn't defined yet.
-        -- This might be very large if it's a full spritesheet.
-        -- If a single, cropped image of the player is available, that would be better.
-        -- For now, adhering to "draw the playerImage centered".
-        love.graphics.setColor(1, 1, 1) -- Ensure no prior tinting affects the sprite
+        love.graphics.setColor(1, 1, 1)
         love.graphics.draw(
             playerImage,
             Player.data.x,
             Player.data.y,
             0, -- rotation
-            1, -- scale x (adjust if sprite is too big/small)
-            1, -- scale y (adjust if sprite is too big/small)
-            width / 2, -- origin offset x
-            height / 2  -- origin offset y
+            Config.spriteScale, -- Use global scale
+            Config.spriteScale, -- Use global scale
+            width / 2, -- origin offset x based on original image width
+            height / 2  -- origin offset y based on original image height
         )
     else
-        -- Fallback to circle if assets aren't loaded or player_spritesheet is missing
+        if not Config then print("Warning: Config not available in Player.draw") end
         love.graphics.setColor(0, 1, 1)
         love.graphics.circle("fill", Player.data.x, Player.data.y, Player.data.radius)
-        print("Warning: Player sprite not found in Assets. Drawing fallback circle.")
+        if not (Assets and Assets.player_spritesheet) then
+            print("Warning: Player sprite not found in Assets. Drawing fallback circle.")
+        end
     end
 end
 
