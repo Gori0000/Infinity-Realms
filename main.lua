@@ -24,6 +24,7 @@ function love.load()
     Game = require("game") -- Game module last as it might use others
     SpellsData = require("spells") -- Load spell definitions
     ItemsData = require("items") -- Load item definitions
+    Effects = require("effects") -- Load visual effects module
 
     -- Initialize modules that require it
     Enemies.initialize()
@@ -46,7 +47,8 @@ function love.load()
     end
 
     -- UI.initialize() if exists
-    Upgrades.recalculatePlayerBonuses(Player, Upgrades.getNodes()) -- Initial bonus calculation
+    Upgrades.recalculatePlayerBonuses(Player, Upgrades.getNodes()) -- Initial bonus calculation for skill tree
+    if Player.recalculateBonuses then Player.recalculateBonuses() end -- Then, recalculate for gear + preserved skill tree bonuses
 end
 
 function love.update(dt)
@@ -70,6 +72,7 @@ function love.update(dt)
         -- Game.update handles bullets, collisions (which then calls Enemies.damage... with callbacks), loot, level up etc.
         -- Pass DebugSettings instead of Config to Game.update
         Game.update(dt, Player, Enemies, DebugSettings, utils)
+        Effects.update(dt) -- Update visual effects
     end
 
     -- Continuous camera movement for upgrade tree (only if tree is visible and game not paused)
@@ -91,9 +94,24 @@ function love.update(dt)
 end
 
 function love.draw()
+    love.graphics.push() -- Start screen shake block / world transform
+
+    if Effects.screenShakeDuration and Effects.screenShakeDuration > 0 then
+        local sx = math.random(-Effects.screenShakeIntensity, Effects.screenShakeIntensity)
+        local sy = math.random(-Effects.screenShakeIntensity, Effects.screenShakeIntensity)
+        love.graphics.translate(sx, sy)
+        Effects.screenShakeDuration = Effects.screenShakeDuration - love.timer.getDelta() -- Use actual dt from love.timer
+        if Effects.screenShakeDuration <= 0 then
+            Effects.screenShakeIntensity = 0 -- Reset intensity
+        end
+    end
+
     Player.draw()
     Enemies.draw()
-    Game.draw() -- Draws bullets and loot
+    Game.draw() -- Draws bullets and loot (and old spell visuals for now)
+    Effects.draw() -- Draw new visual effects
+
+    love.graphics.pop() -- End screen shake block / world transform
 
     -- UI drawing uses getters from Game module for realm info
     UI.drawHUD(Player.data, Game.getPlayerRealm())
@@ -154,6 +172,22 @@ function love.keypressed(key)
 
     if key == "escape" then
         UI.togglePauseMenu()
+    end
+
+    if key == "g" then -- Grant gear
+        print("DEBUG: Granting basic gear set to player.")
+        local gearToGrant = {"basic_wand", "basic_robe", "basic_hat", "basic_boots", "basic_charm"}
+        if Player and Player.addItemToInventory and ItemsData and utils and utils.deepCopy then
+            for _, itemId in ipairs(gearToGrant) do
+                if ItemsData[itemId] then
+                    Player.addItemToInventory(utils.deepCopy(ItemsData[itemId]))
+                else
+                    print("DEBUG: Item " .. itemId .. " not found in ItemsData.")
+                end
+            end
+        else
+            print("DEBUG: Player, Player.addItemToInventory, ItemsData, or utils.deepCopy not available.")
+        end
     end
 
     -- Spell casting keys

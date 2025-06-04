@@ -17,6 +17,13 @@ Player.data = {
     skillPoints = 10000,
     spells = {},
     spellUpgradePoints = 0,
+    gear = {
+        wand = nil,
+        robe = nil,
+        hat = nil,
+        boots = nil,
+        charm = nil
+    },
     inventory = {
         items = (function()
             local t = {}
@@ -76,21 +83,70 @@ function Player.initializeAnimation(playerSheetAsset)
     print("Player animation quads initialized according to new layout. Frame W/H:", frameWidth, frameHeight)
 end
 
+function Player.recalculateBonuses()
+    -- Preserve existing player upgrade tree bonuses (from skill tree, etc.)
+    local baseBonuses = {}
+    if Player.data.calculatedBonuses then
+        for k, v in pairs(Player.data.calculatedBonuses) do
+            baseBonuses[k] = v
+        end
+    end
+
+    -- Initialize Player.data.calculatedBonuses for gear and other runtime effects
+    Player.data.calculatedBonuses = {}
+    for k,v in pairs(baseBonuses) do
+        Player.data.calculatedBonuses[k] = v
+    end
+
+    -- Iterate Through Gear
+    if Player.data.gear then
+        for slot, item in pairs(Player.data.gear) do
+            if item and item.effects then
+                for effectName, value in pairs(item.effects) do
+                    Player.data.calculatedBonuses[effectName] = (Player.data.calculatedBonuses[effectName] or 0) + value
+                end
+            end
+        end
+    end
+
+    -- After summing all bonuses, apply them
+    Player.applyCalculatedBonuses()
+end
+
 function Player.applyCalculatedBonuses()
     local bonuses = Player.data.calculatedBonuses
     if not bonuses then return end
 
+    -- Apply HP_MAX
     local oldMaxHp = Player.data.maxHp
-    Player.data.maxHp = Player.data.baseMaxHp + (bonuses.HP_MAX or 0)
+    Player.data.maxHp = Player.data.baseMaxHp + (bonuses.HP_MAX or 0) -- Ensuring consistency with HP_MAX
     local diffMaxHp = Player.data.maxHp - oldMaxHp
     if diffMaxHp > 0 then
         Player.data.hp = Player.data.hp + diffMaxHp
     end
     Player.data.hp = math.min(Player.data.hp, Player.data.maxHp)
-    if Player.data.hp <=0 and Player.data.maxHp > 0 then
+    if Player.data.hp <=0 and Player.data.maxHp > 0 then -- Ensure HP is at least 1 if maxHp > 0
         Player.data.hp = 1
     end
-    Player.data.speed = Player.data.baseSpeed * (1 + (bonuses.MOVE_SPEED or 0) / 100)
+
+    -- Apply MOVE_SPEED
+    Player.data.speed = Player.data.baseSpeed * (1 + ((bonuses.MOVE_SPEED or 0) / 100))
+
+    -- Other bonuses like SPELL_DAMAGE, CRIT_CHANCE, COOLDOWN_REDUCTION, LOOT_MULTIPLIER
+    -- are stored in Player.data.calculatedBonuses by recalculateBonuses().
+    -- They will be used by other systems directly from Player.data.calculatedBonuses.
+    -- For example, COOLDOWN_REDUCTION is already used in Game.lua for the basic attack.
+    -- SPELL_DAMAGE and CRIT_CHANCE will be used in damage calculation logic.
+    -- LOOT_MULTIPLIER will be used in Game.dropLoot.
+
+    -- Example of how COOLDOWN_REDUCTION might be applied to spells if not already handled globally:
+    -- (This part is illustrative, actual application might be in spell casting or update logic)
+    -- if Player.data.spells then
+    --     for _, spell in ipairs(Player.data.spells) do
+    --         local reduction = (bonuses.COOLDOWN_REDUCTION or 0)
+    --         spell.calculatedCooldown = spell.baseCooldown * (1 - reduction)
+    --     end
+    -- end
 end
 
 function Player.update(dt)
@@ -146,7 +202,13 @@ function Player.castSpell(slotIndex, targetX, targetY)
     end
 
     -- print("Player.castSpell: Casting " .. spell.name)
-    spell.currentCooldown = spell.calculatedCooldown
+    -- Apply player-wide Cooldown Reduction (CDR) from gear/buffs
+    local finalCooldown = spell.calculatedCooldown
+    if Player.data.calculatedBonuses and Player.data.calculatedBonuses.CDR then
+        local playerGlobalCDR_Percent = Player.data.calculatedBonuses.CDR -- This is a percentage, e.g., 5 for 5%
+        finalCooldown = finalCooldown * (1 - (playerGlobalCDR_Percent / 100))
+    end
+    spell.currentCooldown = finalCooldown
 
     -- Game.triggerSpellEffect will be responsible for creating the actual spell effect in the game world
     if Game and Game.triggerSpellEffect then
@@ -342,6 +404,51 @@ function Player.addItemToInventory(itemData)
 
     -- print("Inventory full. Could not add " .. itemName)
     return false -- Inventory is full
+end
+
+function Player.equipItem(itemData)
+    if not itemData or itemData.type ~= "gear" then
+        print("Player.equipItem: Invalid item or item is not gear.")
+        return false
+    end
+
+    local slotName = itemData.slot
+    if not Player.data.gear[slotName] then -- Check if slot exists
+        print("Player.equipItem: Invalid gear slot: " .. tostring(slotName))
+        return false
+    end
+
+    if Player.data.gear[slotName] == nil then
+        Player.data.gear[slotName] = utils.deepCopy(itemData) -- Store a copy
+        print("Player.equipItem: Equipped " .. itemData.name .. " to " .. slotName .. ".")
+        if Player.recalculateBonuses then Player.recalculateBonuses() end
+        return true
+    else
+        -- For now, just print a message if the slot is occupied.
+        -- Later, this could be extended to swap with inventory.
+        print("Player.equipItem: Slot " .. slotName .. " is already occupied by " .. Player.data.gear[slotName].name .. ".")
+        return false
+    end
+end
+
+function Player.unequipItem(slotName)
+    if not slotName or not Player.data.gear[slotName] then
+        print("Player.unequipItem: Invalid slot or no item in slot: " .. tostring(slotName))
+        return false
+    end
+
+    local itemToUnequip = Player.data.gear[slotName]
+
+    -- Attempt to add to inventory
+    if Player.addItemToInventory(itemToUnequip) then
+        Player.data.gear[slotName] = nil
+        print("Player.unequipItem: Unequipped " .. itemToUnequip.name .. " from " .. slotName .. " and added to inventory.")
+        if Player.recalculateBonuses then Player.recalculateBonuses() end
+        return true
+    else
+        print("Player.unequipItem: Failed to unequip " .. itemToUnequip.name .. ". Inventory might be full.")
+        return false
+    end
 end
 
 return Player

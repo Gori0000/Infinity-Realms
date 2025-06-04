@@ -31,8 +31,19 @@ Assets.enemies = {
 -- Loot
 Assets.loot = {
     coin = loadImage("coin.png"),
+    -- essence_t1 is already using essence_green.png, which is fine.
+    -- essence_t2 is already using essence_blue.png, also fine.
+    -- Keep them if they are used as generic types elsewhere,
+    -- or if specific biome drops might fallback to them.
     essence_t1 = loadImage("essence_green.png"),
-    essence_t2 = loadImage("essence_blue.png") -- Added T2 essence
+    essence_t2 = loadImage("essence_blue.png"),
+
+    -- Load specific colored essence graphics for loot drops
+    essence_green = loadImage("essence_green.png"),
+    essence_blue = loadImage("essence_blue.png"),
+    essence_red = loadImage("essence_red.png"),
+    essence_violet = loadImage("essence_violet.png"), -- Assuming "violet" for purple
+    essence_black = loadImage("essence_black.png")
 }
 
 -- Spell Icons (attempt to load, will be nil if files don't exist)
