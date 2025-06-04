@@ -6,6 +6,7 @@ UI.state = {
     showRealmList = false,
     showStatsMenu = false,
     showPauseMenu = false,
+    showDebugMenu = false, -- Added for Debug Menu
     currentUpgradeTreeView = "player", -- "player" or "spell"
     currentSpellSlotView = 1 -- 1 to 5, relevant if currentUpgradeTreeView is "spell"
 }
@@ -13,6 +14,7 @@ UI.state = {
 UI.pauseMenuButtons = {} -- To store button data for click detection
 UI.upgradeTreeViewSwitchButtons = {} -- For "Player", "Spell 1-5" buttons
 UI.spellSlotRegions = {} -- For HUD spell slot hover detection (tooltips)
+UI.debugMenuControls = {} -- For clickable regions in the debug menu
 
 UI.treeOffset = { x = 0, y = 0 } -- This offset itself is not scaled by uiScaleFactor, it's a camera pan.
 UI.treeZoom = 1.0
@@ -39,10 +41,10 @@ function UI.moveUpgradeTreeCamera(dx, dy)
 end
 
 function UI.drawHUD(playerData, currentRealm)
-    local uiScale = (Config and Config.uiScaleFactor) or 1
+    local uiScale = (DebugSettings and DebugSettings.uiScaleFactor) or 1
     local xPos = 10 * uiScale
     local yPos = 10 * uiScale
-    local lineStep = (Config and Config.baseFontSize or 14) * 1.5 * uiScale -- Base line height on font size
+    local lineStep = (DebugSettings and DebugSettings.baseFontSize or 14) * 1.5 * uiScale -- Base line height on font size
 
     love.graphics.setColor(1, 1, 1)
     love.graphics.print("HP: " .. playerData.hp .. "/" .. playerData.maxHp, xPos, yPos)
@@ -60,7 +62,7 @@ end
 
 function UI.drawInventory(playerGold, playerEssenceT1, playerEssenceT2)
     if not UI.state.showInventory then return end
-    local uiScale = (Config and Config.uiScaleFactor) or 1
+    local uiScale = (DebugSettings and DebugSettings.uiScaleFactor) or 1
 
     local rectX = 200 * uiScale
     local rectY = 150 * uiScale
@@ -79,16 +81,17 @@ end
 
 function UI.drawRealmList(realmsTable, currentRealm)
     if not UI.state.showRealmList then return end
-    local uiScale = (Config and Config.uiScaleFactor) or 1
+    local uiScale = (DebugSettings and DebugSettings.uiScaleFactor) or 1
+    local windowWidth = (DebugSettings and DebugSettings.windowWidth) or love.graphics.getWidth() -- Prefer current width
 
     local rectW = 180 * uiScale
     local rectH = 300 * uiScale
-    local rectX = (Config and Config.windowWidth or 1920) - rectW - (10 * uiScale) -- Positioned 10 (scaled) from right edge
+    local rectX = windowWidth - rectW - (10 * uiScale) -- Positioned 10 (scaled) from right edge
     local rectY = 50 * uiScale
 
     local textXOffset = 10 * uiScale
     local titleYOffset = 10 * uiScale
-    local lineStep = (Config and Config.baseFontSize or 14) * 1.5 * uiScale
+    local lineStep = (DebugSettings and DebugSettings.baseFontSize or 14) * 1.5 * uiScale
 
     love.graphics.setColor(0, 0, 0, 0.8)
     love.graphics.rectangle("fill", rectX, rectY, rectW, rectH)
@@ -110,7 +113,7 @@ end
 function UI.drawUpgradeTree(nodesToDraw, currentEffectParams, upgradesSource, treeIdentifier)
     if not UI.state.showUpgradeTree then return end
 
-    local uiScale = (Config and Config.uiScaleFactor) or 1 -- Ensure uiScale is available at the top
+    local uiScale = (DebugSettings and DebugSettings.uiScaleFactor) or 1 -- Ensure uiScale is available at the top
 
     -- First, draw tree switching UI elements (outside the zoom/pan push/pop)
     UI.upgradeTreeViewSwitchButtons = {} -- Clear previous buttons
@@ -287,10 +290,10 @@ end
 function UI.drawStatsMenu(playerData)
     if not UI.state.showStatsMenu then return end
 
-    local uiScale = (Config and Config.uiScaleFactor) or 1
+    local uiScale = (DebugSettings and DebugSettings.uiScaleFactor) or 1
     local xPadding = 15 * uiScale -- Was 20
     local yPadding = 15 * uiScale -- Was 20
-    local lineStep = (Config and Config.baseFontSize or 14) * 1.8 * uiScale -- Slightly larger line step for readability
+    local lineStep = (DebugSettings and DebugSettings.baseFontSize or 14) * 1.8 * uiScale -- Slightly larger line step for readability
     local startX = 150 * uiScale
     local startY = 100 * uiScale
     local menuWidth = 280 * uiScale -- Was 400
@@ -379,7 +382,7 @@ end
 function UI.drawPauseMenu()
     if not UI.state.showPauseMenu then return end
 
-    local uiScale = (Config and Config.uiScaleFactor) or 1
+    local uiScale = (DebugSettings and DebugSettings.uiScaleFactor) or 1
     local screenW, screenH = love.graphics.getWidth(), love.graphics.getHeight()
 
     -- Draw semi-transparent overlay
@@ -429,7 +432,7 @@ end
 function UI.drawSpellSlots(playerSpells)
     if not playerSpells then return end
 
-    local uiScale = (Config and Config.uiScaleFactor) or 1
+    local uiScale = (DebugSettings and DebugSettings.uiScaleFactor) or 1
     local slotSize = 48 * uiScale
     local slotSpacing = 10 * uiScale
     local numSlots = 5
@@ -496,5 +499,108 @@ function UI.drawSpellSlots(playerSpells)
     love.graphics.setColor(1,1,1) -- Reset color
 end
 
+function UI.drawDebugMenu()
+    if not UI.state.showDebugMenu then return end
+
+    local uiScale = (DebugSettings and DebugSettings.uiScaleFactor) or 1
+    local baseFontSize = (DebugSettings and DebugSettings.baseFontSize or 14) -- Ensure baseFontSize is available
+    local screenW, screenH = love.graphics.getWidth(), love.graphics.getHeight()
+    local panelX = screenW * 0.15
+    local panelY = screenH * 0.15
+    local panelW = screenW * 0.7
+    local panelH = screenH * 0.7
+    local padding = 20 * uiScale
+    local lineHeight = baseFontSize * 1.8 * uiScale
+    local buttonSize = 20 * uiScale -- For +/- buttons
+
+    UI.debugMenuControls = {} -- Clear controls for this frame
+
+    -- Draw background panel
+    love.graphics.setColor(0.1, 0.1, 0.1, 0.95)
+    love.graphics.rectangle("fill", panelX, panelY, panelW, panelH)
+    love.graphics.setColor(0.7, 0.7, 0.7, 1)
+    love.graphics.setLineWidth(2)
+    love.graphics.rectangle("line", panelX, panelY, panelW, panelH)
+    love.graphics.setLineWidth(1)
+
+    -- Title
+    love.graphics.setColor(1, 1, 1, 1)
+    local titleText = "Debug Menu"
+    local currentFont = love.graphics.getFont() -- Get current font
+    local titleWidth = currentFont:getWidth(titleText)
+    love.graphics.print(titleText, panelX + (panelW - titleWidth) / 2, panelY + padding)
+
+    local currentY = panelY + padding + lineHeight * 1.5
+    local currentX = panelX + padding
+    local valueDisplayWidth = 80 * uiScale
+    local labelWidth = 200 * uiScale
+
+    local tunableParams = {
+        {label="Player Scale", key="playerScale", step=0.05, min=0.1, max=3.0},
+        {label="Enemy Scale", key="enemyScale", step=0.05, min=0.1, max=3.0},
+        {label="Projectile Scale", key="projectileScale", step=0.05, min=0.05, max=2.0},
+        {label="Loot Scale", key="coinScale", step=0.05, min=0.1, max=2.0},
+        {label="Hitbox Scale", key="hitboxScale", step=0.1, min=0.1, max=5.0},
+        {label="UI Scale Factor", key="uiScaleFactor", step=0.1, min=0.5, max=5.0}
+    }
+
+    for _, param in ipairs(tunableParams) do
+        love.graphics.setColor(1,1,1)
+        love.graphics.print(param.label .. ":", currentX, currentY)
+
+        local currentValue = (DebugSettings and DebugSettings[param.key]) or "N/A"
+        local valueText = type(currentValue) == "number" and string.format("%.2f", currentValue) or tostring(currentValue)
+        love.graphics.print(valueText, currentX + labelWidth, currentY)
+
+        -- [-] button
+        local minusButtonX = currentX + labelWidth + valueDisplayWidth
+        love.graphics.rectangle("line", minusButtonX, currentY, buttonSize, buttonSize)
+        love.graphics.print("-", minusButtonX + buttonSize/2 - currentFont:getWidth("-")/2, currentY + buttonSize/2 - currentFont:getHeight()/2)
+        table.insert(UI.debugMenuControls, {
+            action = "dec", paramKey = param.key, step = param.step, min = param.min,
+            x = minusButtonX, y = currentY, w = buttonSize, h = buttonSize
+        })
+
+        -- [+] button
+        local plusButtonX = minusButtonX + buttonSize + (5 * uiScale)
+        love.graphics.rectangle("line", plusButtonX, currentY, buttonSize, buttonSize)
+        love.graphics.print("+", plusButtonX + buttonSize/2 - currentFont:getWidth("+")/2, currentY + buttonSize/2 - currentFont:getHeight()/2)
+        table.insert(UI.debugMenuControls, {
+            action = "inc", paramKey = param.key, step = param.step, max = param.max,
+            x = plusButtonX, y = currentY, w = buttonSize, h = buttonSize
+        })
+
+        currentY = currentY + lineHeight
+    end -- closes: for _, param in ipairs(tunableParams)
+
+    -- Reset to Defaults button
+    currentY = currentY + lineHeight
+    local resetText = "Reset to Defaults"
+    local resetBtnW = currentFont:getWidth(resetText) + 2 * padding
+    local resetBtnX = panelX + (panelW - resetBtnW) / 2
+    local resetBtnH = buttonSize * 1.5
+    love.graphics.rectangle("line", resetBtnX, currentY, resetBtnW, resetBtnH)
+    love.graphics.print(resetText, resetBtnX + padding, currentY + (resetBtnH - currentFont:getHeight())/2)
+    table.insert(UI.debugMenuControls, {
+        action = "reset_debug",
+        x = resetBtnX, y = currentY, w = resetBtnW, h = resetBtnH
+    })
+    currentY = currentY + resetBtnH + padding
+
+    -- Back button (to close debug menu, typically returning to pause menu)
+    local backText = "Back to Pause Menu"
+    local backBtnW = currentFont:getWidth(backText) + 2 * padding
+    local backBtnX = panelX + (panelW - backBtnW) / 2
+    local backBtnH = buttonSize * 1.5
+    currentY = panelY + panelH - backBtnH - padding -- Position at bottom
+    love.graphics.rectangle("line", backBtnX, currentY, backBtnW, backBtnH)
+    love.graphics.print(backText, backBtnX + padding, currentY + (backBtnH - currentFont:getHeight())/2)
+    table.insert(UI.debugMenuControls, {
+        action = "close_debug",
+        x = backBtnX, y = currentY, w = backBtnW, h = backBtnH
+    })
+
+    love.graphics.setColor(1,1,1) -- Reset color
+end -- closes: function UI.drawDebugMenu()
 
 return UI

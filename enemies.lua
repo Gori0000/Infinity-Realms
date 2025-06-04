@@ -30,11 +30,13 @@ function Enemies.spawnRegularEnemy(realmNumber)
     local enemySpriteKey = availableEnemySpriteKeys[math.random(#availableEnemySpriteKeys)]
     local initialHp = 30 * mult
     local baseSpeed = 60 -- Default base speed
+    local enemyBaseRadius = 24 -- Default base radius for regular enemies
     table.insert(Enemies.list, {
         x = x, y = y,
-        radius = 24,
+        baseRadius = enemyBaseRadius, -- Store baseRadius
+        radius = enemyBaseRadius,     -- Initial radius, will be updated
         speed = baseSpeed,
-        originalSpeed = baseSpeed, -- Store original speed
+        originalSpeed = baseSpeed,
         hp = initialHp,
         maxHp = initialHp,
         exp = 10 * mult,
@@ -46,9 +48,13 @@ end
 function Enemies.spawnBoss()
     local initialBossHp = 1000
     local baseSpeed = 40 -- Default boss base speed
+    local bossBaseRadius = 60 -- Default base radius for boss
     Enemies.boss = {
-        x = 400, y = 50, radius = 60, speed = baseSpeed,
-        originalSpeed = baseSpeed, -- Store original speed
+        x = 400, y = 50,
+        baseRadius = bossBaseRadius, -- Store baseRadius
+        radius = bossBaseRadius,     -- Initial radius, will be updated
+        speed = baseSpeed,
+        originalSpeed = baseSpeed,
         hp = initialBossHp,
         maxHp = initialBossHp,
         exp = 500,
@@ -89,6 +95,9 @@ function Enemies.update(dt, playerData, realmProviderFunc, killsProviderFunc, pl
     for i = #Enemies.list, 1, -1 do
         local e = Enemies.list[i]
         if not e then goto next_enemy_loop end
+
+        -- Update dynamic radius based on DebugSettings
+        e.radius = (e.baseRadius or 24) * (DebugSettings and DebugSettings.hitboxScale or 1.0)
 
         local currentSpeedModifier = 0
         local effectsToRemove = {}
@@ -153,6 +162,9 @@ function Enemies.update(dt, playerData, realmProviderFunc, killsProviderFunc, pl
     -- Update Boss
     if Enemies.boss then
         local boss = Enemies.boss
+        -- Update dynamic radius for boss
+        boss.radius = (boss.baseRadius or 60) * (DebugSettings and DebugSettings.hitboxScale or 1.0)
+
         local currentSpeedModifier = 0
         local effectsToRemove = {}
         local accumulatedBurnDamage = 0
@@ -210,9 +222,10 @@ end
 function Enemies.draw()
     love.graphics.setColor(1, 1, 1)
 
-    local currentEnemyScale = (Config and Config.enemyScale) or 1
-    if not Config then
-        print("Warning: Config not available in Enemies.draw(), using default scale 1.")
+    -- Use DebugSettings for enemyScale
+    local currentEnemyScale = (DebugSettings and DebugSettings.enemyScale) or 1
+    if not DebugSettings then
+        print("Warning: DebugSettings not available in Enemies.draw(), using default scale 1.")
     end
 
     -- Health Bar properties
@@ -246,11 +259,11 @@ function Enemies.draw()
             if Assets and Assets.enemies and Assets.enemies[enemy.spriteKey] then
                  spriteOriginalHeight = Assets.enemies[enemy.spriteKey]:getHeight()
             else
-                 spriteOriginalHeight = (enemy.radius or 12) * 2 -- Fallback if no sprite
+                 spriteOriginalHeight = (enemy.baseRadius or 12) * 2 -- Fallback if no sprite, use baseRadius for consistency
             end
             local scaledSpriteHalfHeight = (spriteOriginalHeight * currentEnemyScale) / 2
 
-            local barWidth = (enemy.radius or 12) * 2.0 -- Bar width based on enemy radius
+            local barWidth = (enemy.radius or enemy.baseRadius or 12) * 2.0 -- Bar width based on dynamic enemy radius
             local barX = enemy.x - barWidth / 2
             local barY = enemy.y - scaledSpriteHalfHeight - healthBarYOffset
 
@@ -277,7 +290,7 @@ function Enemies.draw()
     -- love.graphics.setColor(1, 1, 1) -- This reset is now inside the loop or after boss
 
     if Enemies.boss then
-        local bossScaleToUse = (Config and Config.defaultSpriteScale) or 1
+        local bossScaleToUse = (DebugSettings and DebugSettings.defaultSpriteScale) or 1 -- Use DebugSettings
         if Enemies.boss.spriteKey and Assets and Assets.enemies and Assets.enemies[Enemies.boss.spriteKey] then
             local bossImage = Assets.enemies[Enemies.boss.spriteKey]
             local width = bossImage:getWidth()
@@ -301,7 +314,7 @@ function Enemies.draw()
             if Enemies.boss.spriteKey and Assets and Assets.enemies and Assets.enemies[Enemies.boss.spriteKey] then
                  bossSpriteOriginalHeight = Assets.enemies[Enemies.boss.spriteKey]:getHeight()
             else
-                 bossSpriteOriginalHeight = (Enemies.boss.radius or 40) * 2 -- Fallback
+                 bossSpriteOriginalHeight = (Enemies.boss.baseRadius or 40) * 2 -- Fallback, use baseRadius
             end
             local bossScaledSpriteHalfHeight = (bossSpriteOriginalHeight * bossScaleToUse) / 2
 
