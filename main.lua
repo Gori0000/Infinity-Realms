@@ -106,10 +106,25 @@ function love.draw()
         end
     end
 
-    Player.draw()
+    -- 1. Draw Background
+    if Assets and Assets.current_background then
+        local bg = Assets.current_background
+        local screenW, screenH = love.graphics.getWidth(), love.graphics.getHeight()
+        local bgW, bgH = bg:getDimensions()
+        local scaleX, scaleY = screenW / bgW, screenH / bgH -- Stretch to fit
+        love.graphics.draw(bg, 0, 0, 0, scaleX, scaleY)
+    else
+        -- Draw a fallback solid color background if no image
+        love.graphics.setColor(0.1,0.1,0.15,1) -- Dark grey/blue as default
+        love.graphics.rectangle("fill", 0,0, love.graphics.getWidth(), love.graphics.getHeight())
+        love.graphics.setColor(1,1,1,1) -- Reset color
+    end
+
+    -- 2. Draw Game World Elements
+    Game.draw() -- Will no longer draw background; draws bullets, loot
     Enemies.draw()
-    Game.draw() -- Draws bullets and loot (and old spell visuals for now)
-    Effects.draw() -- Draw new visual effects
+    Player.draw()
+    Effects.draw() -- Visual effects on top of game elements.
 
     love.graphics.pop() -- End screen shake block / world transform
 

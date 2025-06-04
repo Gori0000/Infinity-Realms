@@ -53,7 +53,7 @@ function UI.drawHUD(playerData, currentRealm)
     yPos = yPos + lineStep
     love.graphics.print("Kills: " .. playerData.kills, xPos, yPos)
     yPos = yPos + lineStep
-    love.graphics.print("Gold: " .. string.format("%.1f", playerData.gold or 0), xPos, yPos)
+    love.graphics.print("Gold: " .. string.format("%.0f", playerData.gold or 0), xPos, yPos)
     yPos = yPos + lineStep
     -- love.graphics.print("Essence T1: " .. playerData.essence.tier1 .. " T2: " .. playerData.essence.tier2, xPos, yPos) -- REMOVED
     -- yPos = yPos + lineStep -- REMOVED (this was for essence line spacing)
@@ -345,7 +345,7 @@ function UI.drawStatsMenu(playerData)
     currentY = currentY + lineStep
     love.graphics.print("Kills: " .. (playerData.kills or 0), textX, currentY)
     currentY = currentY + lineStep
-    love.graphics.print("Gold: " .. string.format("%.1f", playerData.gold or 0), textX, currentY)
+    love.graphics.print("Gold: " .. string.format("%.0f", playerData.gold or 0), textX, currentY)
     currentY = currentY + lineStep
 
     -- Calculated bonuses
