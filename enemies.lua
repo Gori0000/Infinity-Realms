@@ -22,6 +22,14 @@ function Enemies.initialize()
     Enemies.spawnTimer = 0
 end
 
+function Enemies.flash(enemyRef, color, duration)
+    if not enemyRef then return end
+    enemyRef.isFlashing = true
+    enemyRef.flashColor = color
+    enemyRef.flashDuration = duration
+    enemyRef.flashTimer = duration -- Use a separate timer to count down
+end
+
 function Enemies.spawnRegularEnemy(realmNumber)
     local mult = 1 + (realmNumber - 1) * 0.25
     local x = math.random((Config and Config.windowWidth) or 800)
@@ -149,6 +157,17 @@ function Enemies.update(dt, playerData, realmProviderFunc, killsProviderFunc, pl
         local angle = math.atan2(playerData.y - e.y, playerData.x - e.x)
         e.x = e.x + math.cos(angle) * e.speed * dt
         e.y = e.y + math.sin(angle) * e.speed * dt
+
+        -- Update flash effect
+        if e.isFlashing then
+            e.flashTimer = e.flashTimer - dt
+            if e.flashTimer <= 0 then
+                e.isFlashing = false
+                e.flashColor = nil
+                e.flashDuration = nil
+                e.flashTimer = nil
+            end
+        end
         ::next_enemy_loop::
     end
 
@@ -216,6 +235,17 @@ function Enemies.update(dt, playerData, realmProviderFunc, killsProviderFunc, pl
             boss.x = boss.x + math.cos(angle) * boss.speed * dt
             boss.y = boss.y + math.sin(angle) * boss.speed * dt
         end
+
+        -- Update boss flash effect
+        if Enemies.boss and Enemies.boss.isFlashing then
+            Enemies.boss.flashTimer = Enemies.boss.flashTimer - dt
+            if Enemies.boss.flashTimer <= 0 then
+                Enemies.boss.isFlashing = false
+                Enemies.boss.flashColor = nil
+                Enemies.boss.flashDuration = nil
+                Enemies.boss.flashTimer = nil
+            end
+        end
     end
 end
 
@@ -237,6 +267,12 @@ function Enemies.draw()
     local healthBarBorderSize = 0.5 -- pixels for border
 
     for _, enemy in ipairs(Enemies.list) do
+        local originalColor = {love.graphics.getColor()} -- Store current color
+
+        if enemy.isFlashing and enemy.flashColor then
+            love.graphics.setColor(unpack(enemy.flashColor))
+        end
+
         if Assets and Assets.enemies and Assets.enemies[enemy.spriteKey] then
             local enemyImage = Assets.enemies[enemy.spriteKey]
             local width = enemyImage:getWidth()
@@ -246,9 +282,14 @@ function Enemies.draw()
             if Assets and Assets.enemies then
                 print("Warning: Missing sprite for enemy type: " .. (enemy.spriteKey or "unknown") .. ". Drawing circle.")
             end
-            love.graphics.setColor(1, 0, 0)
+            -- If not flashing, use default red for fallback circle, else flashColor is already set
+            if not (enemy.isFlashing and enemy.flashColor) then love.graphics.setColor(1,0,0) end
             love.graphics.circle("fill", enemy.x, enemy.y, enemy.radius or 12)
-            love.graphics.setColor(1, 1, 1) -- Reset color after drawing fallback
+            -- love.graphics.setColor(1, 1, 1) -- Reset color after drawing fallback (handled by originalColor restore)
+        end
+
+        if enemy.isFlashing then -- Reset color to original after drawing
+            love.graphics.setColor(unpack(originalColor))
         end
 
         -- After drawing sprite:
@@ -290,6 +331,11 @@ function Enemies.draw()
     -- love.graphics.setColor(1, 1, 1) -- This reset is now inside the loop or after boss
 
     if Enemies.boss then
+        local originalBossColor = {love.graphics.getColor()} -- Store current color
+        if Enemies.boss.isFlashing and Enemies.boss.flashColor then
+            love.graphics.setColor(unpack(Enemies.boss.flashColor))
+        end
+
         local bossScaleToUse = (DebugSettings and DebugSettings.defaultSpriteScale) or 1 -- Use DebugSettings
         if Enemies.boss.spriteKey and Assets and Assets.enemies and Assets.enemies[Enemies.boss.spriteKey] then
             local bossImage = Assets.enemies[Enemies.boss.spriteKey]
@@ -297,9 +343,14 @@ function Enemies.draw()
             local height = bossImage:getHeight()
             love.graphics.draw(bossImage, Enemies.boss.x, Enemies.boss.y, 0, bossScaleToUse, bossScaleToUse, width/2, height/2)
         else
-            love.graphics.setColor(0.5, 0, 0)
+            -- If not flashing, use default dark red for fallback circle, else flashColor is already set
+            if not (Enemies.boss.isFlashing and Enemies.boss.flashColor) then love.graphics.setColor(0.5, 0, 0) end
             love.graphics.circle("fill", Enemies.boss.x, Enemies.boss.y, Enemies.boss.radius or 40)
-            love.graphics.setColor(1, 1, 1) -- Reset color after drawing fallback
+            -- love.graphics.setColor(1, 1, 1) -- Reset color after drawing fallback (handled by originalBossColor restore)
+        end
+
+        if Enemies.boss.isFlashing then -- Reset color to original after drawing
+            love.graphics.setColor(unpack(originalBossColor))
         end
 
         -- After drawing boss sprite:
