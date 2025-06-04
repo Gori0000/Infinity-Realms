@@ -403,7 +403,7 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
             if l.type == "coin" then
                 local playerRadius = (Player.data and Player.data.radius) or 10
                 if utils.distance(Player.data.x, Player.data.y, l.x, l.y) < (playerRadius + l.radius) then
-                    Player.data.gold = Player.data.gold + 0.1 -- Changed from 1 to 0.1
+                    Player.data.gold = Player.data.gold + 1 -- Changed back from 0.1 to 1
                     table.remove(Game.loot, i)
                 end
             elseif l.type == "item_drop" then
@@ -696,19 +696,7 @@ function Game.draw()
     local coinS = (current_config.coinScale) or 1
     local defaultS = (current_config.defaultSpriteScale) or 1
 
-    -- Draw Background
-    if Assets and Assets.current_background then
-        local bg = Assets.current_background
-        local screenW, screenH = love.graphics.getWidth(), love.graphics.getHeight()
-        local bgW, bgH = bg:getDimensions()
-        local scaleX, scaleY = screenW / bgW, screenH / bgH
-        love.graphics.draw(bg, 0, 0, 0, scaleX, scaleY)
-    else
-        -- Draw a fallback solid color background if no image
-        love.graphics.setColor(0.1,0.1,0.15,1) -- Dark grey/blue as default
-        love.graphics.rectangle("fill", 0,0, love.graphics.getWidth(), love.graphics.getHeight())
-        love.graphics.setColor(1,1,1,1) -- Reset color
-    end
+    -- Background is now drawn in main.lua
 
     -- Draw bullets
     if Assets and Assets.projectile_blue then
