@@ -31,8 +31,8 @@ Assets.enemies = {
 -- Loot
 Assets.loot = {
     coin = loadImage("coin.png"),
-    essence_t1 = loadImage("essence_green.png")
-    -- essence_t2 will be handled by fallback color in Game.draw() as it has no sprite
+    essence_t1 = loadImage("essence_green.png"),
+    essence_t2 = loadImage("essence_blue.png") -- Added T2 essence
 }
 
 -- Spell Icons (attempt to load, will be nil if files don't exist)

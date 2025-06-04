@@ -1,4 +1,5 @@
 local Game = {}
+local utils = require("utils") -- Required for deepCopy in dropLoot
 
 Game.bullets = {}
 Game.shootCooldown = 0
@@ -48,7 +49,8 @@ function Game.triggerSpellEffect(playerOriginData, spellData, targetX, targetY)
             y = playerOriginData.y,
             dx = math.cos(angle) * projectileSpeed,
             dy = math.sin(angle) * projectileSpeed,
-            radius = spellData.projectileRadius or 8, -- Define a radius for collision, default 8
+            baseRadius = spellData.projectileRadius or 8, -- Store baseRadius
+            radius = spellData.projectileRadius or 8,     -- Initial radius, will be updated
             rangeRemaining = spellData.calculatedRange,
             damage = spellData.calculatedDamage,
             pierceRemaining = spellData.calculatedPierce,
@@ -186,17 +188,37 @@ end
 
 
 function Game.dropLoot(x, y, playerData)
+    -- Coin drop
     if math.random() < 0.5 then
-        -- playerData.gold = playerData.gold + 1 -- Gold is now awarded on pickup
-        table.insert(Game.loot, {x=x,y=y, type="coin", radius=8})
+        table.insert(Game.loot, {x=x,y=y, type="coin", baseRadius=8, radius=8})
     end
+
+    -- Essence T1 drop
     if math.random() < 0.05 then
-        playerData.essence.tier1 = playerData.essence.tier1 + 1
-        table.insert(Game.loot, {x=x,y=y, type="essence_t1", radius=8})
+        if ItemsData and ItemsData.essence_t1 then
+            local itemToDrop = utils.deepCopy(ItemsData.essence_t1)
+            table.insert(Game.loot, {
+                x=x, y=y, type="item_drop",
+                baseRadius=8, radius=8,
+                itemData = itemToDrop
+            })
+        else
+            print("Warning: ItemsData.essence_t1 not found for dropLoot.")
+        end
     end
+
+    -- Essence T2 drop
     if math.random() < 0.02 then
-        playerData.essence.tier2 = playerData.essence.tier2 + 1
-        table.insert(Game.loot, {x=x,y=y, type="essence_t2", radius=8})
+        if ItemsData and ItemsData.essence_t2 then
+            local itemToDrop = utils.deepCopy(ItemsData.essence_t2)
+            table.insert(Game.loot, {
+                x=x, y=y, type="item_drop",
+                baseRadius=8, radius=8,
+                itemData = itemToDrop
+            })
+        else
+            print("Warning: ItemsData.essence_t2 not found for dropLoot.")
+        end
     end
 end
 
@@ -220,7 +242,8 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
             x = Player.data.x, y = Player.data.y,
             dx = math.cos(angle) * 400,
             dy = math.sin(angle) * 400,
-            radius = 5,
+            baseRadius = 5, -- Store baseRadius
+            radius = 5,     -- Initial radius, will be updated
             type = "normal"
         })
         Game.shootCooldown = actualCooldown
@@ -229,6 +252,9 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
     for i = #Game.bullets, 1, -1 do
         local b = Game.bullets[i]
         if b then
+            -- Update dynamic radius for bullets
+            b.radius = (b.baseRadius or 5) * (config_arg and config_arg.hitboxScale or 1.0) -- Use config_arg as DebugSettings
+
             b.x, b.y = b.x + b.dx * dt, b.y + b.dy * dt
             if b.x < 0 or b.x > config_arg.windowWidth or b.y < 0 or b.y > config_arg.windowHeight then
                 table.remove(Game.bullets, i)
@@ -239,6 +265,9 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
     for i = #Game.bullets, 1, -1 do
         local b = Game.bullets[i]
         if not b then goto next_bullet_enemy_collision end
+
+        -- Ensure radius is updated if not already (e.g. if created before hitboxScale was available)
+        b.radius = (b.baseRadius or 5) * (config_arg and config_arg.hitboxScale or 1.0)
 
         local currentEnemies = Enemies.getList()
         for j = #currentEnemies, 1, -1 do
@@ -279,12 +308,29 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
     -- Player-Loot collision (specifically for coins)
     for i = #Game.loot, 1, -1 do
         local l = Game.loot[i]
-        if l and l.type == "coin" then
-            -- Assuming Player.data.radius is defined and represents player's pickup radius
-            local playerRadius = (Player.data and Player.data.radius) or 10 -- Fallback radius
-            if utils.distance(Player.data.x, Player.data.y, l.x, l.y) < (playerRadius + l.radius) then
-                Player.data.gold = Player.data.gold + 1
-                table.remove(Game.loot, i)
+        if l then
+            -- Update dynamic radius for loot items
+            l.radius = (l.baseRadius or 8) * (config_arg and config_arg.hitboxScale or 1.0)
+
+            if l.type == "coin" then
+                local playerRadius = (Player.data and Player.data.radius) or 10
+                if utils.distance(Player.data.x, Player.data.y, l.x, l.y) < (playerRadius + l.radius) then
+                    Player.data.gold = Player.data.gold + 1
+                    table.remove(Game.loot, i)
+                end
+            elseif l.type == "item_drop" then
+                local playerRadius = (Player.data and Player.data.radius) or 10
+                if utils.distance(Player.data.x, Player.data.y, l.x, l.y) < (playerRadius + l.radius) then
+                    if Player.addItemToInventory then
+                        if Player.addItemToInventory(l.itemData) then
+                            table.remove(Game.loot, i)
+                        else
+                            -- Optional: print("Inventory full, cannot pick up " .. l.itemData.name)
+                        end
+                    else
+                        print("Error: Player.addItemToInventory function not found.")
+                    end
+                end
             end
         end
     end
@@ -304,6 +350,9 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
         if not spell then goto next_spell_update end
 
         if spell.type == "projectile" then
+            -- Update dynamic radius for spell projectiles
+            spell.radius = (spell.baseRadius or 8) * (config_arg and config_arg.hitboxScale or 1.0)
+
             spell.x = spell.x + spell.dx * dt
             spell.y = spell.y + spell.dy * dt
             local distanceMoved = (spell.dx^2 + spell.dy^2)^0.5 * dt
@@ -488,12 +537,15 @@ function Game.update(dt, Player, Enemies, config_arg, utils)
 end
 
 function Game.draw()
-    if not Config then
-        print("Warning: Global Config not available in Game.draw(). Sprite scales may be incorrect.")
+    -- Use DebugSettings (passed as config_arg) for scales
+    local current_config = config_arg or Config -- Fallback to Config if DebugSettings somehow not passed
+    if not current_config then
+        print("Warning: Config/DebugSettings not available in Game.draw(). Sprite scales may be incorrect.")
+        current_config = {} -- Prevent errors below
     end
-    local projScale = (Config and Config.projectileScale) or 1
-    local coinS = (Config and Config.coinScale) or 1
-    local defaultS = (Config and Config.defaultSpriteScale) or 1
+    local projScale = (current_config.projectileScale) or 1
+    local coinS = (current_config.coinScale) or 1
+    local defaultS = (current_config.defaultSpriteScale) or 1
 
     -- Draw bullets
     if Assets and Assets.projectile_blue then
@@ -517,15 +569,27 @@ function Game.draw()
 
     -- Draw loot
     for _, l in ipairs(Game.loot) do
-        local lootImage = Assets.loot and Assets.loot[l.type]
         local currentLootScale = defaultS
+        local lootImage = nil
+        local fallbackColor = {1,0,1,1} -- Magenta for unknown
 
         if l.type == "coin" then
             currentLootScale = coinS
+            lootImage = Assets.loot and Assets.loot.coin
+            fallbackColor = {1, 0.84, 0, 1} -- Gold
+        elseif l.type == "item_drop" and l.itemData then
+            -- For items, their specific scale might be defined in ItemsData later, or use defaultS
+            lootImage = Assets.loot and Assets.loot[l.itemData.id]
+            if l.itemData.id == "essence_t1" then fallbackColor = {0,1,0,1} -- Green
+            elseif l.itemData.id == "essence_t2" then fallbackColor = {0.2,0.5,1,1} -- Blue
+            end
+        else
+            -- This handles old essence_t1, essence_t2 types if they still exist by mistake
+            lootImage = Assets.loot and Assets.loot[l.type]
+            if l.type == "essence_t1" then fallbackColor = {0,1,0,1}
+            elseif l.type == "essence_t2" then fallbackColor = {0.2,0.5,1,1}
+            end
         end
-        -- Add other specific loot type scales here if needed e.g.
-        -- elseif l.type == "essence_t1" then currentLootScale = Config.essenceScale or defaultS end
-
 
         if lootImage then
             love.graphics.setColor(1, 1, 1)
@@ -534,17 +598,9 @@ function Game.draw()
             love.graphics.draw(lootImage, l.x, l.y, 0, currentLootScale, currentLootScale, lWidth / 2, lHeight / 2)
         else
             if Assets and Assets.loot then
-                 print("Info: No sprite for loot type: " .. (l.type or "unknown") .. ". Drawing fallback circle.")
+                 print("Info: No sprite for loot type: " .. (l.type or "unknown") .. (l.itemData and (" (" .. l.itemData.id .. ")") or "") .. ". Drawing fallback circle.")
             end
-            if l.type == "coin" then
-                love.graphics.setColor(1, 0.84, 0)
-            elseif l.type == "essence_t1" then
-                love.graphics.setColor(0, 1, 0)
-            elseif l.type == "essence_t2" then
-                love.graphics.setColor(0.2, 0.5, 1)
-            else
-                love.graphics.setColor(1, 0, 1)
-            end
+            love.graphics.setColor(unpack(fallbackColor))
             love.graphics.circle("fill", l.x, l.y, l.radius or 5)
         end
     end

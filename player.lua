@@ -5,7 +5,8 @@ Player.data = {
     x = 400, y = 300,
     baseSpeed = 200,
     speed = 200,
-    radius = 15,
+    baseRadius = 15, -- Changed from radius
+    radius = 15,     -- Will be updated dynamically
     baseMaxHp = 100,
     maxHp = 100,
     hp = 100,
@@ -13,9 +14,19 @@ Player.data = {
     gold = 0, essence = {tier1 = 0, tier2 = 0},
     calculatedBonuses = {},
     facingDirection = "S",
-    skillPoints = 10000, -- Add this line
+    skillPoints = 10000,
     spells = {},
-    spellUpgradePoints = 0
+    spellUpgradePoints = 0,
+    inventory = {
+        items = (function()
+            local t = {}
+            for i = 1, 16 do t[i] = nil end
+            return t
+        end)(), -- Creates a table with 16 nil values
+        width = 4,
+        height = 4,
+        maxSlots = 16
+    }
 }
 
 Player.quads = {}
@@ -108,6 +119,9 @@ function Player.update(dt)
         end
     end
 
+    -- Update dynamic radius based on DebugSettings
+    Player.data.radius = (Player.data.baseRadius or 15) * (DebugSettings and DebugSettings.hitboxScale or 1.0)
+
     -- Update spell cooldowns
     if Player.data.spells then
         for i, spell in ipairs(Player.data.spells) do
@@ -147,8 +161,12 @@ function Player.castSpell(slotIndex, targetX, targetY)
 end
 
 function Player.draw()
-    if not (Assets and Assets.player_spritesheet and Config and Player.quads) then
-        if not Config then print("Warning (Player.draw): Config not available for scaling.") end
+    -- Use DebugSettings instead of Config for playerScale
+    if not (Assets and Assets.player_spritesheet and DebugSettings and Player.quads) then
+        if not DebugSettings then print("Warning (Player.draw): DebugSettings not available for scaling.")
+        else
+            if not Config then print("Warning (Player.draw): Config not available for scaling (should be DebugSettings).") end
+        end
         if not (Assets and Assets.player_spritesheet) then print("Warning (Player.draw): Player sprite not found in Assets.") end
         if not Player.quads then print("Warning (Player.draw): Player.quads not initialized.") end
 
@@ -209,8 +227,8 @@ function Player.draw()
         Player.data.x,
         Player.data.y,
         0,
-        (Config and Config.playerScale) or 0.5,
-        (Config and Config.playerScale) or 0.5,
+        (DebugSettings and DebugSettings.playerScale) or 0.5, -- Use DebugSettings
+        (DebugSettings and DebugSettings.playerScale) or 0.5, -- Use DebugSettings
         frameWidth / 2,
         frameHeight / 2
     )
@@ -281,6 +299,49 @@ function Player.initializeSpells(spellsDataDefinitions)
             Player.data.spells[i] = nil -- No spell for this slot
         end
     end
+end
+
+function Player.addItemToInventory(itemData)
+    if not Player.data.inventory or not Player.data.inventory.items then
+        print("Error: Player inventory not initialized.")
+        return false
+    end
+
+    local inv = Player.data.inventory
+    local itemName = itemData.name or itemData.id -- Use name for print, id for comparison
+
+    -- Try to stack if stackable
+    if itemData.stackable then
+        for i = 1, inv.maxSlots do
+            local slotItem = inv.items[i]
+            if slotItem and slotItem.id == itemData.id then
+                local currentQuantity = slotItem.quantity or 0
+                local maxStack = itemData.maxStack or 99 -- Use itemData's maxStack definition
+                if currentQuantity < maxStack then
+                    slotItem.quantity = currentQuantity + 1
+                    -- print("Stacked " .. itemName .. " in slot " .. i .. ". New quantity: " .. slotItem.quantity)
+                    return true -- Item stacked
+                end
+            end
+        end
+    end
+
+    -- Try to find an empty slot for non-stackable or if existing stacks are full
+    for i = 1, inv.maxSlots do
+        if inv.items[i] == nil then
+            inv.items[i] = utils.deepCopy(itemData) -- Store a copy
+            if inv.items[i].stackable then -- Initialize quantity if it's stackable, even for a new stack
+                inv.items[i].quantity = 1
+            else
+                inv.items[i].quantity = nil -- Ensure non-stackable items don't have quantity field or set to 1 if appropriate
+            end
+            -- print("Added " .. itemName .. " to empty slot " .. i)
+            return true -- Item added to empty slot
+        end
+    end
+
+    -- print("Inventory full. Could not add " .. itemName)
+    return false -- Inventory is full
 end
 
 return Player

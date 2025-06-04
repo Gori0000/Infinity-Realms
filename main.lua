@@ -5,6 +5,7 @@ local lastMouseX, lastMouseY = 0, 0
 function love.load()
     -- Load core modules first
     Config = require("config") -- Made global with capital
+    DebugSettings = require("debug_settings") -- Load debug settings
     utils = require("utils")
     Assets = require("assets") -- Load assets early
 
@@ -22,6 +23,7 @@ function love.load()
     UI = require("ui")
     Game = require("game") -- Game module last as it might use others
     SpellsData = require("spells") -- Load spell definitions
+    ItemsData = require("items") -- Load item definitions
 
     -- Initialize modules that require it
     Enemies.initialize()
@@ -66,7 +68,8 @@ function love.update(dt)
         Enemies.update(dt, Player.data, realmProvider, killsProvider, Player.data, Game)
 
         -- Game.update handles bullets, collisions (which then calls Enemies.damage... with callbacks), loot, level up etc.
-        Game.update(dt, Player, Enemies, Config, utils) -- Pass global Config
+        -- Pass DebugSettings instead of Config to Game.update
+        Game.update(dt, Player, Enemies, DebugSettings, utils)
     end
 
     -- Continuous camera movement for upgrade tree (only if tree is visible and game not paused)
@@ -116,6 +119,7 @@ function love.draw()
     UI.drawSpellSlots(Player.data.spells) -- Draw spell slots HUD
     UI.drawStatsMenu(Player.data) -- Add this line
     UI.drawPauseMenu() -- Draw pause menu on top
+    UI.drawDebugMenu() -- Draw debug menu on top of everything if active
 end
 
 function love.keypressed(key)
@@ -173,7 +177,9 @@ function love.mousepressed(x, y, button) -- Function definition starts here (aro
                         if btn.label == "Continue" then
                             UI.togglePauseMenu()
                         elseif btn.label == "Settings" then
-                            print("Settings clicked - Placeholder") -- Placeholder
+                            UI.state.showPauseMenu = false
+                            UI.state.showDebugMenu = true
+                            print("Settings clicked - Opening Debug Menu")
                         elseif btn.label == "Credits" then
                             print("Credits clicked - Placeholder") -- Placeholder
                         elseif btn.label == "Quit" then
@@ -184,10 +190,52 @@ function love.mousepressed(x, y, button) -- Function definition starts here (aro
                 end -- closes: for _, btn ...
             end -- closes: if UI.pauseMenuButtons
             return -- Click was on the overlay but not on a button, consume it
-        end -- closes: if UI.state.showPauseMenu then
 
-        -- If not paused, check other UI elements (e.g., Upgrade Tree)
-        if UI.state.showUpgradeTree then
+        elseif UI.state.showDebugMenu then -- IMPORTANT: Use elseif here
+            if UI.debugMenuControls then
+                for _, control in ipairs(UI.debugMenuControls) do
+                    if x >= control.x and x <= control.x + control.w and y >= control.y and y <= control.y + control.h then
+                        if control.action == "inc" then
+                            DebugSettings[control.paramKey] = math.min(control.max, (DebugSettings[control.paramKey] or 0) + control.step)
+                            print("DebugSettings." .. control.paramKey .. " increased to " .. DebugSettings[control.paramKey])
+                            if control.paramKey == "uiScaleFactor" or control.paramKey == "baseFontSize" then -- Font needs recreation
+                                local effectiveFontSize = (DebugSettings.baseFontSize or 14) * (DebugSettings.uiScaleFactor or 1)
+                                font = love.graphics.newFont(math.floor(effectiveFontSize))
+                                love.graphics.setFont(font)
+                            end
+                        elseif control.action == "dec" then
+                            DebugSettings[control.paramKey] = math.max(control.min, (DebugSettings[control.paramKey] or 0) - control.step)
+                            print("DebugSettings." .. control.paramKey .. " decreased to " .. DebugSettings[control.paramKey])
+                            if control.paramKey == "uiScaleFactor" or control.paramKey == "baseFontSize" then -- Font needs recreation
+                                local effectiveFontSize = (DebugSettings.baseFontSize or 14) * (DebugSettings.uiScaleFactor or 1)
+                                font = love.graphics.newFont(math.floor(effectiveFontSize))
+                                love.graphics.setFont(font)
+                            end
+                        elseif control.action == "reset_debug" then
+                            if DebugSettings.originalDefaults then
+                                for k_param, v_param in pairs(DebugSettings.originalDefaults) do
+                                    DebugSettings[k_param] = v_param
+                                end
+                                print("DebugSettings reset to original defaults.")
+                                -- Font needs recreation after reset
+                                local effectiveFontSize = (DebugSettings.baseFontSize or 14) * (DebugSettings.uiScaleFactor or 1)
+                                font = love.graphics.newFont(math.floor(effectiveFontSize))
+                                love.graphics.setFont(font)
+                            else
+                                print("Error: DebugSettings.originalDefaults not found!")
+                            end
+                        elseif control.action == "close_debug" then
+                            UI.state.showDebugMenu = false
+                            UI.state.showPauseMenu = true -- Go back to the pause menu
+                            print("Closed Debug Menu, returning to Pause Menu.")
+                        end
+                        return -- Click handled by debug menu control
+                    end
+                end
+            end
+            return -- Click was inside debug menu area but not on a specific control, consume it
+
+        elseif UI.state.showUpgradeTree then -- Use elseif here
             -- First, check for clicks on tree view switch buttons
             if UI.upgradeTreeViewSwitchButtons then
                 for _, switchBtn in ipairs(UI.upgradeTreeViewSwitchButtons) do
