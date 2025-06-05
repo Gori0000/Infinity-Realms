@@ -5,13 +5,13 @@ local config = {
 
     -- Font and UI scaling
     baseFontSize = 14,    -- Base font size before UI scaling
-    uiScaleFactor = 3,    -- Factor to scale UI elements (text, nodes, HUD text)
+    uiScaleFactor = 2,    -- Factor to scale UI elements (text, nodes, HUD text)
 
     -- Individual sprite category scaling
     playerScale = 0.5,       -- Overall scale for the player sprite (wizard_spritesheet.png is 256x256, so 0.5 makes it 128x128)
-    enemyScale = 0.25,       -- Original value was 0.5 / 3 (approx 0.166). Adjusted for better visibility.
-    projectileScale = 0.35,  -- Original value was 0.5 / 8 (0.0625). Adjusted for better visibility.
-    coinScale = 0.15,        -- Changed from 0.3 to 0.15
+    enemyScale = 0.15,       -- Original value was 0.5 / 3 (approx 0.166). Adjusted for better visibility.
+    projectileScale = 0.15,  -- Original value was 0.5 / 8 (0.0625). Adjusted for better visibility.
+    coinScale = 0.05,        -- Changed from 0.3 to 0.15
 
     defaultSpriteScale = 0.5, -- For other sprites like essences, or as a general fallback if a specific scale isn't defined.
                             -- Note: The original `spriteScale = 0.5` might have been intended as this default.
